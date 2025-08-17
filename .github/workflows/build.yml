@@ -26,23 +26,27 @@ jobs:
         with:
           submodules: "true"
       - name: Create Build Directory
+        shell: bash
         run: |
           mkdir -p ${{ matrix.config.build-dir }}
       - name: Generate
         working-directory: ./${{ matrix.config.build-dir }}
+        shell: bash
         run: |
           cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DOPENVDB_CORE_SHARED=OFF -DTBB_TEST=OFF
       - name: Build
         working-directory: ./${{ matrix.config.build-dir }}
+        shell: bash
         run: |
-          cmake --build . --target main --config Release
+          cmake --build . --target _coacd main --config Release
       # - name: Run `make`
       #   working-directory: ./${{ matrix.config.build-dir }}
       #   run: |
       #     make main -j2
       - name: List Build Results
+        shell: bash
         run: |
-          ls ${{ matrix.config.build-dir }}
+          ls -R ${{ matrix.config.build-dir }}
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -50,3 +54,8 @@ jobs:
           path: |
             ./${{ matrix.config.build-dir }}/**/main
             ./${{ matrix.config.build-dir }}/**/main.exe
+            ./${{ matrix.config.build-dir }}/**/*.so
+            ./${{ matrix.config.build-dir }}/**/*.dylib
+            ./${{ matrix.config.build-dir }}/**/*.dll
+            ./${{ matrix.config.build-dir }}/**/*.lib
+          if-no-files-found: warn
