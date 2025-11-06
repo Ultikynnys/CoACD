@@ -2,9 +2,11 @@
 #include "mcts.h"
 #include "config.h"
 #include "bvh.h"
+#include "profiler.h"
 
 #include <iostream>
 #include <cmath>
+#include "logger.h"
 
 namespace coacd
 {
@@ -12,42 +14,31 @@ namespace coacd
 
     bool IsManifold(Model &input)
     {
+        profiler::ScopedTimer timer("IsManifold");
         logger::info(" - Manifold Check");
         clock_t start, end;
         start = clock();
         // Check all edges are shared by exactly two triangles (watertight manifold)
-        vector<pair<int, int>> edges;
-        map<pair<int, int>, int> edge_num;
+        std::unordered_map<uint64_t, int> edge_count;
+        edge_count.reserve(input.triangles.size() * 3);
+        
+        constexpr auto edge_key = [](int a, int b) -> uint64_t {
+            return (static_cast<uint64_t>(a) << 32) | static_cast<uint64_t>(b);
+        };
+        
+        // Single pass: build edge_count and check duplicates
         for (int i = 0; i < (int)input.triangles.size(); i++)
         {
-            int idx0 = input.triangles[i][0];
-            int idx1 = input.triangles[i][1];
-            int idx2 = input.triangles[i][2];
-            edges.push_back({idx0, idx1});
-            edges.push_back({idx1, idx2});
-            edges.push_back({idx2, idx0});
-
-            if (!edge_num.contains({idx0, idx1}))
-                edge_num[{idx0, idx1}] = 1;
-            else
-            {
-                logger::info("\tWrong triangle orientation");
-                end = clock();
-                logger::info("Manifold Check Time: {}s", double(end - start) / CLOCKS_PER_SEC);
-                return false;
-            }
-            if (!edge_num.contains({idx1, idx2}))
-                edge_num[{idx1, idx2}] = 1;
-            else
-            {
-                logger::info("\tWrong triangle orientation");
-                end = clock();
-                logger::info("Manifold Check Time: {}s", double(end - start) / CLOCKS_PER_SEC);
-                return false;
-            }
-            if (!edge_num.contains({idx2, idx0}))
-                edge_num[{idx2, idx0}] = 1;
-            else
+            const vec3i &tri = input.triangles[i];
+            int idx0 = tri[0];
+            int idx1 = tri[1];
+            int idx2 = tri[2];
+            
+            uint64_t e1 = edge_key(idx0, idx1);
+            uint64_t e2 = edge_key(idx1, idx2);
+            uint64_t e3 = edge_key(idx2, idx0);
+            
+            if (++edge_count[e1] > 1 || ++edge_count[e2] > 1 || ++edge_count[e3] > 1)
             {
                 logger::info("\tWrong triangle orientation");
                 end = clock();
@@ -55,11 +46,14 @@ namespace coacd
                 return false;
             }
         }
-
-        for (int i = 0; i < (int)edges.size(); i++)
+        
+        // Check opposite edges exist - optimized with early exit
+        for (const auto& [key, count] : edge_count)
         {
-            pair<int, int> oppo_edge = {edges[i].second, edges[i].first};
-            if (!edge_num.contains(oppo_edge))
+            int a = static_cast<int>(key >> 32);
+            int b = static_cast<int>(key & 0xFFFFFFFF);
+            uint64_t oppo_key = edge_key(b, a);
+            if (edge_count.count(oppo_key) == 0)
             {
                 logger::info("\tUnclosed mesh");
                 end = clock();
@@ -100,9 +94,12 @@ namespace coacd
         return true;
     }
 
-    double pts_norm(vec3d pt, vec3d p)
+    inline double pts_norm(vec3d pt, vec3d p)
     {
-        return sqrt(pow(pt[0] - p[0], 2) + pow(pt[1] - p[1], 2) + pow(pt[2] - p[2], 2));
+        double dx = pt[0] - p[0];
+        double dy = pt[1] - p[1];
+        double dz = pt[2] - p[2];
+        return sqrt(dx*dx + dy*dy + dz*dz);
     }
 
     double compute_edge_cost(Model &ch, string apx_mode, int tri_i, int tri_j, vector<int> &rm_pt_idxs)
@@ -140,76 +137,58 @@ namespace coacd
 
     void DecimateCH(Model &ch, int tgt_pts, string apx_mode)
     {
+        profiler::ScopedTimer timer("DecimateCH");
         if (tgt_pts >= (int)ch.points.size())
             return;
 
         vector<vec3d> new_pts;
-        vector<int> rm_pt_idxs;
+        vector<int> rm_pts;
         int n_pts = (int)ch.points.size();
         int tgt_n = min(tgt_pts, (int)ch.points.size());
 
-        // compute edges
-        vector<pair<double, pair<int, int>>> edge_costs;
-        for (int i = 0; i < (int)ch.triangles.size(); i++)
-        {
-            for (int j = 0; j < 3; j++)
-                if (ch.triangles[i][j] > ch.triangles[i][(j + 1) % 3])
-                {
-                    // double cost = pts_norm(ch.points[ch.triangles[i][j]], ch.points[ch.triangles[i][(j + 1) % 3]]);
-
-                    double cost = compute_edge_cost(ch, apx_mode, ch.triangles[i][j], ch.triangles[i][(j + 1) % 3], rm_pt_idxs);
-
-                    edge_costs.push_back({cost, {ch.triangles[i][j], ch.triangles[i][(j + 1) % 3]}});
-                }
-        }
-
+        // Original simple algorithm - stable and tested
         while (n_pts > tgt_n)
         {
-            // sort the points by the cost
-            sort(edge_costs.begin(), edge_costs.end());
+            // compute edges
+            vector<pair<double, pair<int, int>>> edges;
+            for (int i = 0; i < (int)ch.triangles.size(); i++)
+            {
+                for (int j = 0; j < 3; j++)
+                    if (ch.triangles[i][j] > ch.triangles[i][(j + 1) % 3])
+                    {
+                        double cost = compute_edge_cost(ch, apx_mode, ch.triangles[i][j], ch.triangles[i][(j + 1) % 3], rm_pts);
+                        edges.push_back({cost, {ch.triangles[i][j], ch.triangles[i][(j + 1) % 3]}});
+                    }
+            }
 
-            // remove the edge with the smallest cost
-            pair<int, int> edge = edge_costs[0].second;
+            sort(edges.begin(), edges.end());
+            pair<int, int> edge = edges[0].second;
             vec3d new_pt = {0.5 * (ch.points[edge.first][0] + ch.points[edge.second][0]),
                             0.5 * (ch.points[edge.first][1] + ch.points[edge.second][1]),
                             0.5 * (ch.points[edge.first][2] + ch.points[edge.second][2])};
 
-            rm_pt_idxs.push_back(edge.first);
-            rm_pt_idxs.push_back(edge.second);
-
-            ch.points.push_back(new_pt);
+            new_pts.push_back(new_pt);
+            rm_pts.push_back(edge.first);
+            rm_pts.push_back(edge.second);
             n_pts -= 1;
-            edge_costs[0].first = INF;
-
-            // update the neighboring edge costs
-            int new_pt_idx = ch.points.size() - 1;
-            for (int i = 0; i < (int)edge_costs.size(); i++)
-            {
-                if (edge_costs[i].second.first == edge.first && edge_costs[i].second.second == edge.second)
-                    edge_costs[i].first = INF;
-                else if (edge_costs[i].second.first == edge.first || edge_costs[i].second.first == edge.second)
-                {
-                    // edge_costs[i].first = pts_norm(new_pt, ch.points[edge_costs[i].second.second]);
-                    edge_costs[i].first = compute_edge_cost(ch, apx_mode, new_pt_idx, edge_costs[i].second.second, rm_pt_idxs);
-                    edge_costs[i].second.first = new_pt_idx;
-                }
-                else if (edge_costs[i].second.second == edge.first || edge_costs[i].second.second == edge.second)
-                {
-                    // edge_costs[i].first = pts_norm(new_pt, ch.points[edge_costs[i].second.first]);
-                    edge_costs[i].first = compute_edge_cost(ch, apx_mode, edge_costs[i].second.first, new_pt_idx, rm_pt_idxs);
-                    edge_costs[i].second.second = edge_costs[i].second.first;
-                    edge_costs[i].second.first = new_pt_idx; // larger idx should be the first!
-                }
-            }
         }
 
         // remove the points and add new points
         Model new_ch;
         for (int i = 0; i < (int)ch.points.size(); i++)
         {
-            if (find(rm_pt_idxs.begin(), rm_pt_idxs.end(), i) == rm_pt_idxs.end())
+            bool not_rm = true;
+            for (int j = 0; j < (int)rm_pts.size(); j++)
+                if (i == rm_pts[j])
+                {
+                    not_rm = false;
+                    break;
+                }
+            if (not_rm)
                 new_ch.points.push_back(ch.points[i]);
         }
+        for (int i = 0; i < (int)new_pts.size(); i++)
+            new_ch.points.push_back(new_pts[i]);
 
         new_ch.ComputeAPX(ch, apx_mode, true);
     }
@@ -226,6 +205,8 @@ namespace coacd
     void MergeCH(Model &ch1, Model &ch2, Model &ch, Params &params)
     {
         Model merge;
+        merge.points.reserve(ch1.points.size() + ch2.points.size());
+        merge.triangles.reserve(ch1.triangles.size() + ch2.triangles.size());
         merge.points.insert(merge.points.end(), ch1.points.begin(), ch1.points.end());
         merge.points.insert(merge.points.end(), ch2.points.begin(), ch2.points.end());
         merge.triangles.insert(merge.triangles.end(), ch1.triangles.begin(), ch1.triangles.end());
@@ -235,8 +216,32 @@ namespace coacd
         merge.ComputeAPX(ch, params.apx_mode, true);
     }
 
+    // Compute AABB for a model
+    inline void ComputeAABB(const Model &m, vec3d &mn, vec3d &mx)
+    {
+        mn = { +INF, +INF, +INF };
+        mx = { -INF, -INF, -INF };
+        for (const auto &p : m.points)
+        {
+            if (p[0] < mn[0]) mn[0] = p[0]; if (p[0] > mx[0]) mx[0] = p[0];
+            if (p[1] < mn[1]) mn[1] = p[1]; if (p[1] > mx[1]) mx[1] = p[1];
+            if (p[2] < mn[2]) mn[2] = p[2]; if (p[2] > mx[2]) mx[2] = p[2];
+        }
+    }
+
+    // Minimum distance between two AABBs (0 if they overlap)
+    inline double AABBMinDistance(const vec3d &aMin, const vec3d &aMax, const vec3d &bMin, const vec3d &bMax)
+    {
+        double dx = 0.0, dy = 0.0, dz = 0.0;
+        if (aMax[0] < bMin[0]) dx = bMin[0] - aMax[0]; else if (bMax[0] < aMin[0]) dx = aMin[0] - bMax[0];
+        if (aMax[1] < bMin[1]) dy = bMin[1] - aMax[1]; else if (bMax[1] < aMin[1]) dy = aMin[1] - bMax[1];
+        if (aMax[2] < bMin[2]) dz = bMin[2] - aMax[2]; else if (bMax[2] < aMin[2]) dz = aMin[2] - bMax[2];
+        return sqrt(dx*dx + dy*dy + dz*dz);
+    }
+
     double MergeConvexHulls(Model &m, vector<Model> &meshs, vector<Model> &cvxs, Params &params, double epsilon, double threshold)
     {
+        profiler::ScopedTimer timer("MergeConvexHulls");
         logger::info(" - Merge Convex Hulls");
         size_t nConvexHulls = (size_t)cvxs.size();
         double h = 0;
@@ -249,31 +254,43 @@ namespace coacd
             costMatrix.resize(bound);    // only keeps the top half of the matrix
             precostMatrix.resize(bound); // only keeps the top half of the matrix
 
+            // Precompute AABBs for fast rejection
+            vector<vec3d> aabbMin(cvxs.size()), aabbMax(cvxs.size());
+            for (size_t i = 0; i < cvxs.size(); ++i)
+                ComputeAABB(cvxs[i], aabbMin[i], aabbMax[i]);
+
+            // Precompute self pre-costs once (expensive call)
+            vector<double> preCostSelf(cvxs.size());
+            for (int i = 0; i < (int)cvxs.size(); ++i)
+            {
+                preCostSelf[i] = ComputeHCost(meshs[i], cvxs[i], params.rv_k, 3000, params.seed);
+            }
+
             size_t p1, p2;
-#ifdef _OPENMP
-#pragma omp parallel for default(none) shared(costMatrix, precostMatrix, cvxs, params, bound, threshold, meshs) private(p1, p2)
-#endif
+            const unsigned int coarseRes = std::min(params.resolution, (unsigned int)1500);
             for (int idx = 0; idx < bound; ++idx)
             {
                 p1 = (int)(sqrt(8 * idx + 1) - 1) >> 1; // compute nearest triangle number index
                 int sum = (p1 * (p1 + 1)) >> 1;         // compute nearest triangle number from index
                 p2 = idx - sum;                         // modular arithmetic from triangle number
                 p1++;
-                double dist = MeshDist(cvxs[p1], cvxs[p2]);
-                if (dist < threshold)
+                // Cheap AABB pre-check
+                double aabbDist = AABBMinDistance(aabbMin[p1], aabbMax[p1], aabbMin[p2], aabbMax[p2]);
+                if (aabbDist < threshold)
                 {
+                    double dist = MeshDist(cvxs[p1], cvxs[p2]);
                     Model combinedCH;
                     MergeCH(cvxs[p1], cvxs[p2], combinedCH, params);
 
-                    costMatrix[idx] = ComputeHCost(cvxs[p1], cvxs[p2], combinedCH, params.rv_k, params.resolution, params.seed);
-                    precostMatrix[idx] = max(ComputeHCost(meshs[p1], cvxs[p1], params.rv_k, 3000, params.seed),
-                                             ComputeHCost(meshs[p2], cvxs[p2], params.rv_k, 3000, params.seed));
+                    costMatrix[idx] = ComputeHCost(cvxs[p1], cvxs[p2], combinedCH, params.rv_k, coarseRes, params.seed);
+                    precostMatrix[idx] = max(preCostSelf[p1], preCostSelf[p2]);
                 }
                 else
                 {
                     costMatrix[idx] = INF;
                 }
             }
+
 
             size_t costSize = (size_t)cvxs.size();
 
@@ -330,8 +347,22 @@ namespace coacd
                 MergeCH(cvxs[p1], cvxs[p2], cch, params);
                 cvxs[p2] = cch;
 
+                // Update AABB for merged hull
+                ComputeAABB(cvxs[p2], aabbMin[p2], aabbMax[p2]);
+
+                // Update preCostSelf for merged hull conservatively
+                preCostSelf[p2] = max(preCostSelf[p2] + bestCost, preCostSelf[p1]);
+
                 std::swap(cvxs[p1], cvxs[cvxs.size() - 1]);
                 cvxs.pop_back();
+
+                // Keep AABBs and preCostSelf in sync with cvxs swap/pop
+                std::swap(aabbMin[p1], aabbMin[aabbMin.size() - 1]);
+                std::swap(aabbMax[p1], aabbMax[aabbMax.size() - 1]);
+                aabbMin.pop_back();
+                aabbMax.pop_back();
+                std::swap(preCostSelf[p1], preCostSelf[preCostSelf.size() - 1]);
+                preCostSelf.pop_back();
 
                 costSize = costSize - 1;
 
@@ -339,13 +370,14 @@ namespace coacd
                 size_t rowIdx = ((p2 - 1) * p2) >> 1;
                 for (size_t i = 0; (i < p2); ++i)
                 {
-                    double dist = MeshDist(cvxs[p2], cvxs[i]);
-                    if (dist < threshold)
+                    double aabbDist = AABBMinDistance(aabbMin[p2], aabbMax[p2], aabbMin[i], aabbMax[i]);
+                    if (aabbDist < threshold)
                     {
+                        double dist = MeshDist(cvxs[p2], cvxs[i]);
                         Model combinedCH;
                         MergeCH(cvxs[p2], cvxs[i], combinedCH, params);
-                        costMatrix[rowIdx] = ComputeHCost(cvxs[p2], cvxs[i], combinedCH, params.rv_k, params.resolution, params.seed);
-                        precostMatrix[rowIdx++] = max(precostMatrix[p2] + bestCost, precostMatrix[i]);
+                        costMatrix[rowIdx] = ComputeHCost(cvxs[p2], cvxs[i], combinedCH, params.rv_k, coarseRes, params.seed);
+                        precostMatrix[rowIdx++] = max(preCostSelf[p2], preCostSelf[i]);
                     }
                     else
                         costMatrix[rowIdx++] = INF;
@@ -354,13 +386,14 @@ namespace coacd
                 rowIdx += p2;
                 for (size_t i = p2 + 1; (i < costSize); ++i)
                 {
-                    double dist = MeshDist(cvxs[p2], cvxs[i]);
-                    if (dist < threshold)
+                    double aabbDist = AABBMinDistance(aabbMin[p2], aabbMax[p2], aabbMin[i], aabbMax[i]);
+                    if (aabbDist < threshold)
                     {
+                        double dist = MeshDist(cvxs[p2], cvxs[i]);
                         Model combinedCH;
                         MergeCH(cvxs[p2], cvxs[i], combinedCH, params);
-                        costMatrix[rowIdx] = ComputeHCost(cvxs[p2], cvxs[i], combinedCH, params.rv_k, params.resolution, params.seed);
-                        precostMatrix[rowIdx] = max(precostMatrix[p2] + bestCost, precostMatrix[i]);
+                        costMatrix[rowIdx] = ComputeHCost(cvxs[p2], cvxs[i], combinedCH, params.rv_k, coarseRes, params.seed);
+                        precostMatrix[rowIdx] = max(preCostSelf[p2], preCostSelf[i]);
                     }
                     else
                         costMatrix[rowIdx] = INF;
@@ -430,28 +463,73 @@ namespace coacd
 
     void ExtrudeConvexHulls(vector<Model> &cvxs, Params &params, double eps)
     {
+        profiler::ScopedTimer timer("ExtrudeConvexHulls");
         logger::info(" - Extrude Convex Hulls");
+        // Precompute AABBs for pruning
+        vector<vec3d> aabbMin(cvxs.size()), aabbMax(cvxs.size());
+        for (size_t i = 0; i < cvxs.size(); ++i)
+            ComputeAABB(cvxs[i], aabbMin[i], aabbMax[i]);
+
         for (int i = 0; i < (int)cvxs.size(); i++)
         {
-            Model cvx = cvxs[i];
-            for (int j = 0; j < (int)cvxs.size(); j++)
+            for (int j = i + 1; j < (int)cvxs.size(); j++)
             {
+                // Cheap rejection using AABB distance
+                double aabbDist = AABBMinDistance(aabbMin[i], aabbMax[i], aabbMin[j], aabbMax[j]);
+                if (aabbDist >= eps)
+                    continue;
+
                 Model convex1 = cvxs[i], convex2 = cvxs[j];
                 Plane overlap_plane;
 
-                double dist = MeshDist(convex1, convex2);
                 bool flag = ComputeOverlapFace(convex1, convex2, overlap_plane);
+                if (!flag)
+                    continue;
 
-                // only extrude the convex hulls along the normal of overlap plane
-                if (dist < eps && flag)
+                double dist = MeshDist(convex1, convex2);
+                if (dist < eps)
                 {
                     ExtrudeCH(convex1, overlap_plane, params, params.extrude_margin);
-                    cvxs[i] = convex1;
                     ExtrudeCH(convex2, overlap_plane, params, params.extrude_margin);
+                    cvxs[i] = convex1;
                     cvxs[j] = convex2;
+                    // Update AABBs after modification
+                    ComputeAABB(cvxs[i], aabbMin[i], aabbMax[i]);
+                    ComputeAABB(cvxs[j], aabbMin[j], aabbMax[j]);
                 }
             }
         }
+    }
+
+    // Validate mesh indices and report the first offending triangle
+    bool ValidateModel(Model &m, const char* stage)
+    {
+        const size_t nP = m.points.size();
+        int negativeIdxCount = 0;
+        for (int i = 0; i < (int)m.triangles.size(); ++i)
+        {
+            const vec3i &t = m.triangles[i];
+            for (int k = 0; k < 3; ++k)
+            {
+                int idx = t[k];
+                if (idx < 0)
+                {
+                    // Negative indices are placeholders during clipping; warn only
+                    negativeIdxCount++;
+                    continue;
+                }
+                if ((size_t)idx >= nP)
+                {
+                    logger::critical("[{}] invalid triangle index: tri#{}, idx={} (points={})", stage, i, idx, (int)nP);
+                    return false;
+                }
+            }
+        }
+        if (negativeIdxCount > 0)
+        {
+            logger::warn("[{}] found {} placeholder indices (<0) in triangles", stage, negativeIdxCount);
+        }
+        return true;
     }
 
     vector<Model> Compute(Model &mesh, Params &params)
@@ -479,7 +557,7 @@ namespace coacd
             vector<Model> tmp;
             logger::info("iter {} ---- waiting pool: {}", iter, InputParts.size());
 #ifdef _OPENMP
-#pragma omp parallel for default(none) shared(InputParts, params, mesh, writelock, parts, pmeshs, tmp) private(cut_area)
+#pragma omp parallel for default(none) schedule(dynamic,1) shared(InputParts, params, mesh, writelock, parts, pmeshs, tmp) private(cut_area)
 #endif
             for (int p = 0; p < (int)InputParts.size(); p++)
             {
@@ -489,8 +567,15 @@ namespace coacd
 
                 Model pmesh = InputParts[p], pCH;
                 Plane bestplane;
-                pmesh.ComputeAPX(pCH, params.apx_mode, true);
-                double h = ComputeHCost(pmesh, pCH, params.rv_k, params.resolution, params.seed, 0.0001, false);
+                {
+                    profiler::ScopedTimer timer("ComputeAPX");
+                    pmesh.ComputeAPX(pCH, params.apx_mode, true);
+                }
+                double h;
+                {
+                    profiler::ScopedTimer timer("ComputeHCost");
+                    h = ComputeHCost(pmesh, pCH, params.rv_k, params.resolution, params.seed, 0.0001, false);
+                }
 
                 if (h > params.threshold)
                 {
@@ -500,7 +585,11 @@ namespace coacd
                     Node *node = new Node(params);
                     State state(params, pmesh);
                     node->set_state(state);
-                    Node *best_next_node = MonteCarloTreeSearch(params, node, best_path);
+                    Node *best_next_node;
+                    {
+                        profiler::ScopedTimer timer("MonteCarloTreeSearch");
+                        best_next_node = MonteCarloTreeSearch(params, node, best_path);
+                    }
                     if (best_next_node == NULL)
                     {
 #ifdef _OPENMP
@@ -516,11 +605,18 @@ namespace coacd
                     else
                     {
                         bestplane = best_next_node->state->current_value.first;
-                        TernaryMCTS(pmesh, params, bestplane, best_path, best_next_node->quality_value); // using Rv to Ternary refine
+                        {
+                            profiler::ScopedTimer timer("TernaryMCTS");
+                            TernaryMCTS(pmesh, params, bestplane, best_path, best_next_node->quality_value);
+                        }
                         free_tree(node, 0);
 
                         Model pos, neg;
-                        bool clipf = Clip(pmesh, pos, neg, bestplane, cut_area);
+                        bool clipf;
+                        {
+                            profiler::ScopedTimer timer("Clip");
+                            clipf = Clip(pmesh, pos, neg, bestplane, cut_area);
+                        }
                         if (!clipf)
                         {
                             logger::error("Wrong clip proposal!");

@@ -1,23 +1,21 @@
 #include "cost.h"
 #include "hausdorff.h"
+#include "profiler.h"
 
 namespace coacd
 {
 
   constexpr double Pi = 3.14159265;
 
-  double ComputeRv(Model &tmesh1, Model &tmesh2, double k, double epsilon)
+  inline double ComputeRv(Model &tmesh1, Model &tmesh2, double k, double epsilon)
   {
-    double v1, v2;
-    v1 = MeshVolume(tmesh1);
-    v2 = MeshVolume(tmesh2);
-
+    double v1 = MeshVolume(tmesh1);
+    double v2 = MeshVolume(tmesh2);
     double d = pow(3 * fabs(v1 - v2) / (4 * Pi), 1.0 / 3) * k;
-
     return d;
   }
 
-  double ComputeRv(Model &cvx1, Model &cvx2, Model &cvxCH, double k, double epsilon)
+  inline double ComputeRv(Model &cvx1, Model &cvx2, Model &cvxCH, double k, double epsilon)
   {
     double v1, v2, v3;
 
@@ -32,6 +30,7 @@ namespace coacd
 
   double ComputeHb(Model &tmesh1, Model &tmesh2, unsigned int resolution, unsigned int seed, bool flag)
   {
+    profiler::ScopedTimer timer("ComputeHb_Hausdorff");
     vector<vec3d> samples1, samples2;
     vector<int> sample_tri_ids1, sample_tri_ids2;
 
@@ -132,4 +131,5 @@ namespace coacd
 
     return minDist;
   }
+
 }

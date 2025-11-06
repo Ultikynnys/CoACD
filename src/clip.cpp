@@ -1,10 +1,38 @@
 #include "clip.h"
 #include "process.h"
+#include "profiler.h"
 #include "include/CDTUtils.h"
 #include "include/CDT.h"
+#include <unordered_map>
+#include <unordered_set>
+#include <cmath>
 
 namespace coacd
 {
+    struct PairHash {
+        size_t operator()(const std::pair<int, int>& p) const noexcept {
+            return (static_cast<uint64_t>(static_cast<uint32_t>(p.first)) << 32) ^ static_cast<uint32_t>(p.second);
+        }
+    };
+
+    struct QKey {
+        int x, y, z;
+        bool operator==(const QKey& o) const noexcept { return x == o.x && y == o.y && z == o.z; }
+    };
+    struct QKeyHash {
+        size_t operator()(const QKey& k) const noexcept {
+            // mix integers
+            size_t h1 = static_cast<size_t>(static_cast<uint32_t>(k.x)) * 73856093u;
+            size_t h2 = static_cast<size_t>(static_cast<uint32_t>(k.y)) * 19349663u;
+            size_t h3 = static_cast<size_t>(static_cast<uint32_t>(k.z)) * 83492791u;
+            return h1 ^ h2 ^ h3;
+        }
+    };
+    inline QKey QuantKey(const vec3d& p) {
+        const double s = 1e4; // 1e-4 precision grid
+        return QKey{ (int)llround(p[0]*s), (int)llround(p[1]*s), (int)llround(p[2]*s) };
+    }
+
     void Writepoints(vector<array<double, 2>> points, string filename)
     {
         std::ofstream os(filename);
@@ -35,7 +63,10 @@ namespace coacd
 
         for (int i = 1; i < (int)border.size(); i++)
         {
-            double dist = sqrt(pow(border[idx0][0] - border[i][0], 2) + pow(border[idx0][1] - border[i][1], 2) + pow(border[idx0][2] - border[i][2], 2));
+            double dx = border[idx0][0] - border[i][0];
+            double dy = border[idx0][1] - border[i][1];
+            double dz = border[idx0][2] - border[i][2];
+            double dist = sqrt(dx*dx + dy*dy + dz*dz);
             if (dist > 0.01)
             {
                 flag = 1;
@@ -63,7 +94,9 @@ namespace coacd
             BC[2] = p2[2] - p1[2];
 
             double dot_product = AB[0] * BC[0] + AB[1] * BC[1] + AB[2] * BC[2];
-            double res = dot_product / (sqrt(pow(AB[0], 2) + pow(AB[1], 2) + pow(AB[2], 2)) * sqrt(pow(BC[0], 2) + pow(BC[1], 2) + pow(BC[2], 2)));
+            double AB_len = sqrt(AB[0]*AB[0] + AB[1]*AB[1] + AB[2]*AB[2]);
+            double BC_len = sqrt(BC[0]*BC[0] + BC[1]*BC[1] + BC[2]*BC[2]);
+            double res = dot_product / (AB_len * BC_len);
             if (fabs(fabs(res) - 1) > 1e-6 && fabs(res) < INF) // AB not \\ BC, dot product != 1
             {
                 flag = 1;
@@ -94,23 +127,29 @@ namespace coacd
 
         // rotation matrix
         double eps = 0.0;
-        R[0][0] = (p0[0] - p1[0]) / (sqrt(pow(p0[0] - p1[0], 2) + pow(p0[1] - p1[1], 2) + pow(p0[2] - p1[2], 2)) + eps);
-        R[0][1] = (p0[1] - p1[1]) / (sqrt(pow(p0[0] - p1[0], 2) + pow(p0[1] - p1[1], 2) + pow(p0[2] - p1[2], 2)) + eps);
-        R[0][2] = (p0[2] - p1[2]) / (sqrt(pow(p0[0] - p1[0], 2) + pow(p0[1] - p1[1], 2) + pow(p0[2] - p1[2], 2)) + eps);
+        double dx01 = p0[0] - p1[0];
+        double dy01 = p0[1] - p1[1];
+        double dz01 = p0[2] - p1[2];
+        double len01 = sqrt(dx01*dx01 + dy01*dy01 + dz01*dz01) + eps;
+        R[0][0] = dx01 / len01;
+        R[0][1] = dy01 / len01;
+        R[0][2] = dz01 / len01;
 
         t0 = (p2[2] - p0[2]) * R[0][1] - (p2[1] - p0[1]) * R[0][2];
         t1 = (p2[0] - p0[0]) * R[0][2] - (p2[2] - p0[2]) * R[0][0];
         t2 = (p2[1] - p0[1]) * R[0][0] - (p2[0] - p0[0]) * R[0][1];
-        R[2][0] = t0 / (sqrt(pow(t0, 2) + pow(t1, 2) + pow(t2, 2)) + eps);
-        R[2][1] = t1 / (sqrt(pow(t0, 2) + pow(t1, 2) + pow(t2, 2)) + eps);
-        R[2][2] = t2 / (sqrt(pow(t0, 2) + pow(t1, 2) + pow(t2, 2)) + eps);
+        double len_t = sqrt(t0*t0 + t1*t1 + t2*t2) + eps;
+        R[2][0] = t0 / len_t;
+        R[2][1] = t1 / len_t;
+        R[2][2] = t2 / len_t;
 
         t0 = R[2][2] * R[0][1] - R[2][1] * R[0][2];
         t1 = R[2][0] * R[0][2] - R[2][2] * R[0][0];
         t2 = R[2][1] * R[0][0] - R[2][0] * R[0][1];
-        R[1][0] = t0 / (sqrt(pow(t0, 2) + pow(t1, 2) + pow(t2, 2)) + eps);
-        R[1][1] = t1 / (sqrt(pow(t0, 2) + pow(t1, 2) + pow(t2, 2)) + eps);
-        R[1][2] = t2 / (sqrt(pow(t0, 2) + pow(t1, 2) + pow(t2, 2)) + eps);
+        double len_t2 = sqrt(t0*t0 + t1*t1 + t2*t2) + eps;
+        R[1][0] = t0 / len_t2;
+        R[1][1] = t1 / len_t2;
+        R[1][2] = t2 / len_t2;
 
         return true;
     }
@@ -195,49 +234,54 @@ namespace coacd
                                 map<int, int> &vertex_map, vector<vec3d> &final_border, vector<vec3i> &final_triangles)
     {
         deque<pair<int, int>> BFS_edges(border_edges.begin(), border_edges.end());
-        map<pair<int, int>, pair<int, int>> edge_map;
-        map<pair<int, int>, bool> border_map;
-        map<pair<int, int>, bool> same_edge_map;
-        map<int, bool> overlap_map;
+        std::unordered_map<pair<int, int>, pair<int, int>, PairHash> edge_map;
+        std::unordered_set<pair<int, int>, PairHash> border_map;
+        std::unordered_set<pair<int, int>, PairHash> same_edge_map;
         const int v_lenth = (int)border.size();
         const int f_lenth = (int)border_triangles.size();
         bool *add_vertex = new bool[v_lenth]();
         bool *remove_map = new bool[f_lenth]();
 
-        for (int i = 0; i < (int)overlap.size(); i++)
-            for (int j = 0; j < (int)border.size(); j++)
-                if (SamePointDetect(overlap[i], border[j]))
-                    overlap_map[j + 1] = true;
+        // Build a quantized index for border vertices, then mark overlaps quickly
+        std::unordered_map<QKey, int, QKeyHash> border_index_map;
+        border_index_map.reserve(v_lenth * 2 + 1);
+        for (int j = 0; j < (int)border.size(); j++)
+            border_index_map[QuantKey(border[j])] = j + 1;
+        std::vector<char> overlap_flags(v_lenth + 1, 0);
+        for (int i = 0; i < (int)overlap.size(); i++) {
+            auto it = border_index_map.find(QuantKey(overlap[i]));
+            if (it != border_index_map.end()) overlap_flags[it->second] = 1;
+        }
 
+        // Seed edge direction sets and border map
         for (int i = 0; i < (int)border_edges.size(); i++)
         {
             int v0 = border_edges[i].first, v1 = border_edges[i].second;
-            same_edge_map[std::pair<int, int>(v0, v1)] = true;
+            same_edge_map.insert(std::pair<int, int>(v0, v1));
         }
         for (int i = 0; i < (int)border_edges.size(); i++)
         {
             int v0 = border_edges[i].first, v1 = border_edges[i].second;
             if (same_edge_map.find(std::pair<int, int>(v1, v0)) == same_edge_map.end())
             {
-                border_map[std::pair<int, int>(v0, v1)] = true;
-                border_map[std::pair<int, int>(v1, v0)] = true;
+                border_map.insert(std::pair<int, int>(v0, v1));
+                border_map.insert(std::pair<int, int>(v1, v0));
             }
         }
 
-        int borderN = border.size();
+        int borderN = (int)border.size();
         for (int i = 0; i < (int)border_triangles.size(); i++)
         {
-            int v0, v1, v2;
-            v0 = border_triangles[i][0];
-            v1 = border_triangles[i][1];
-            v2 = border_triangles[i][2];
+            int v0 = border_triangles[i][0];
+            int v1 = border_triangles[i][1];
+            int v2 = border_triangles[i][2];
 
             if (!(v0 >= 1 && v0 <= borderN && v1 >= 1 && v1 <= borderN && v2 >= 1 && v2 <= borderN)) // ignore points added by triangle
                 continue;
 
-            pair<int, int> edge01 = std::pair<int, int>(v0, v1), edge10 = std::pair<int, int>(v1, v0);
-            pair<int, int> edge12 = std::pair<int, int>(v1, v2), edge21 = std::pair<int, int>(v2, v1);
-            pair<int, int> edge20 = std::pair<int, int>(v2, v0), edge02 = std::pair<int, int>(v0, v2);
+            std::pair<int, int> edge01 = std::pair<int, int>(v0, v1), edge10 = std::pair<int, int>(v1, v0);
+            std::pair<int, int> edge12 = std::pair<int, int>(v1, v2), edge21 = std::pair<int, int>(v2, v1);
+            std::pair<int, int> edge20 = std::pair<int, int>(v2, v0), edge02 = std::pair<int, int>(v0, v2);
 
             if (!(same_edge_map.find(edge10) != same_edge_map.end() && same_edge_map.find(edge01) != same_edge_map.end()))
             {
@@ -267,18 +311,18 @@ namespace coacd
         int i = 0;
         while (!BFS_edges.empty())
         {
-            pair<int, int> item = BFS_edges[0];
+            std::pair<int, int> item = BFS_edges[0];
             BFS_edges.pop_front();
             int v0 = item.first, v1 = item.second;
             int idx;
-            pair<int, int> edge01 = std::pair<int, int>(v0, v1), edge10 = std::pair<int, int>(v1, v0);
+            std::pair<int, int> edge01 = std::pair<int, int>(v0, v1), edge10 = std::pair<int, int>(v1, v0);
             if (i < (int)border_edges.size() && edge_map.find(edge10) != edge_map.end())
             {
                 idx = edge_map[edge10].second;
                 if (idx != -1)
                     remove_map[idx] = true;
                 idx = edge_map[edge10].first;
-                if (idx != -1 && !remove_map[idx] && !FaceOverlap(overlap_map, border_triangles[idx]))
+                if (idx != -1 && !remove_map[idx] && !(overlap_flags[border_triangles[idx][0]] || overlap_flags[border_triangles[idx][1]] || overlap_flags[border_triangles[idx][2]]))
                 {
                     remove_map[idx] = true;
                     final_triangles.push_back(border_triangles[idx]);
@@ -288,7 +332,7 @@ namespace coacd
                     int p0 = border_triangles[idx][0], p1 = border_triangles[idx][1], p2 = border_triangles[idx][2];
                     if (p2 != v0 && p2 != v1)
                     {
-                        pair<int, int> pt12 = std::pair<int, int>(p1, p2), pt20 = std::pair<int, int>(p2, p0);
+                        std::pair<int, int> pt12 = std::pair<int, int>(p1, p2), pt20 = std::pair<int, int>(p2, p0);
                         if (border_map.find(pt12) == border_map.end())
                             BFS_edges.push_back(pt12);
                         if (border_map.find(pt20) == border_map.end())
@@ -296,7 +340,7 @@ namespace coacd
                     }
                     else if (p1 != v0 && p1 != v1)
                     {
-                        pair<int, int> pt12 = std::pair<int, int>(p1, p2), pt01 = std::pair<int, int>(p0, p1);
+                        std::pair<int, int> pt12 = std::pair<int, int>(p1, p2), pt01 = std::pair<int, int>(p0, p1);
                         if (border_map.find(pt12) == border_map.end())
                             BFS_edges.push_back(pt12);
                         if (border_map.find(pt01) == border_map.end())
@@ -304,7 +348,7 @@ namespace coacd
                     }
                     else if (p0 != v0 && p0 != v1)
                     {
-                        pair<int, int> pt01 = std::pair<int, int>(p0, p1), pt20 = std::pair<int, int>(p2, p0);
+                        std::pair<int, int> pt01 = std::pair<int, int>(p0, p1), pt20 = std::pair<int, int>(p2, p0);
                         if (border_map.find(pt01) == border_map.end())
                             BFS_edges.push_back(pt01);
                         if (border_map.find(pt20) == border_map.end())
@@ -318,7 +362,7 @@ namespace coacd
                 if (idx != -1)
                     remove_map[idx] = true;
                 idx = edge_map[edge01].second;
-                if (idx != -1 && !remove_map[idx] && !FaceOverlap(overlap_map, border_triangles[idx]))
+                if (idx != -1 && !remove_map[idx] && !(overlap_flags[border_triangles[idx][0]] || overlap_flags[border_triangles[idx][1]] || overlap_flags[border_triangles[idx][2]]))
                 {
                     remove_map[idx] = true;
                     final_triangles.push_back(border_triangles[idx]);
@@ -328,7 +372,7 @@ namespace coacd
                     int p0 = border_triangles[idx][0], p1 = border_triangles[idx][1], p2 = border_triangles[idx][2];
                     if (p2 != v0 && p2 != v1)
                     {
-                        pair<int, int> pt21 = std::pair<int, int>(p2, p1), pt02 = std::pair<int, int>(p0, p2);
+                        std::pair<int, int> pt21 = std::pair<int, int>(p2, p1), pt02 = std::pair<int, int>(p0, p2);
                         if (border_map.find(pt21) == border_map.end())
                             BFS_edges.push_back(pt21);
                         if (border_map.find(pt02) == border_map.end())
@@ -336,7 +380,7 @@ namespace coacd
                     }
                     else if (p1 != v0 && p1 != v1)
                     {
-                        pair<int, int> pt21 = std::pair<int, int>(p2, p1), pt10 = std::pair<int, int>(p1, p0);
+                        std::pair<int, int> pt21 = std::pair<int, int>(p2, p1), pt10 = std::pair<int, int>(p1, p0);
                         if (border_map.find(pt21) == border_map.end())
                             BFS_edges.push_back(pt21);
                         if (border_map.find(pt10) == border_map.end())
@@ -344,7 +388,7 @@ namespace coacd
                     }
                     else if (p0 != v0 && p0 != v1)
                     {
-                        pair<int, int> pt10 = std::pair<int, int>(p1, p0), pt02 = std::pair<int, int>(p0, p2);
+                        std::pair<int, int> pt10 = std::pair<int, int>(p1, p0), pt02 = std::pair<int, int>(p0, p2);
                         if (border_map.find(pt10) == border_map.end())
                             BFS_edges.push_back(pt10);
                         if (border_map.find(pt02) == border_map.end())
@@ -426,9 +470,11 @@ namespace coacd
         map<pair<int, int>, int> edge_map;
         map<int, int> vertex_map;
 
-        for (int i = 0; i < (int)mesh.triangles.size(); i++)
         {
-            int id0, id1, id2;
+            profiler::ScopedTimer t("Clip_TriangleClassification");
+            for (int i = 0; i < (int)mesh.triangles.size(); i++)
+            {
+                int id0, id1, id2;
             id0 = mesh.triangles[i][0];
             id1 = mesh.triangles[i][1];
             id2 = mesh.triangles[i][2];
@@ -780,14 +826,22 @@ namespace coacd
                         throw runtime_error("Intersection error. Please report this error to sarahwei0210@gmail.com with your input OBJ and log file.");
                 }
             }
+            }
         }
 
         if (border.size() > 2)
         {
             int oriN = (int)border.size();
-            short flag = Triangulation(border, border_edges, border_triangles, plane);
+            short flag;
+            {
+                profiler::ScopedTimer t("Clip_Triangulation");
+                flag = Triangulation(border, border_edges, border_triangles, plane);
+            }
             if (flag == 0)
+            {
+                profiler::ScopedTimer t("Clip_RemoveOutliers");
                 RemoveOutlierTriangles(border, overlap, border_edges, border_triangles, oriN, border_map, final_border, final_triangles);
+            }
             else if (flag == 1)
                 final_border = border; // remember to fill final_border with border!
             else
@@ -802,13 +856,15 @@ namespace coacd
         }
 
         // original points in two parts
-        double pos_x_min = INF, pos_x_max = -INF, pos_y_min = INF, pos_y_max = -INF, pos_z_min = INF, pos_z_max = -INF;
-        double neg_x_min = INF, neg_x_max = -INF, neg_y_min = INF, neg_y_max = -INF, neg_z_min = INF, neg_z_max = -INF;
+        {
+            profiler::ScopedTimer t("Clip_PointCopy");
+            double pos_x_min = INF, pos_x_max = -INF, pos_y_min = INF, pos_y_max = -INF, pos_z_min = INF, pos_z_max = -INF;
+            double neg_x_min = INF, neg_x_max = -INF, neg_y_min = INF, neg_y_max = -INF, neg_z_min = INF, neg_z_max = -INF;
 
-        int pos_idx = 0, neg_idx = 0;
-        int *pos_proj = new int[N]();
-        int *neg_proj = new int[N]();
-        for (int i = 0; i < N; i++)
+            int pos_idx = 0, neg_idx = 0;
+            int *pos_proj = new int[N]();
+            int *neg_proj = new int[N]();
+            for (int i = 0; i < N; i++)
         {
             if (pos_map[i] == true)
             {
@@ -836,10 +892,10 @@ namespace coacd
             }
         }
 
-        int pos_N = (int)pos.points.size(), neg_N = (int)neg.points.size();
+            int pos_N = (int)pos.points.size(), neg_N = (int)neg.points.size();
 
-        // border points & triangles
-        for (int i = 0; i < (int)final_border.size(); i++)
+            // border points & triangles
+            for (int i = 0; i < (int)final_border.size(); i++)
         {
             pos.points.push_back(final_border[i]);
             neg.points.push_back(final_border[i]);
@@ -869,11 +925,13 @@ namespace coacd
         neg.bbox[1] = neg_x_max;
         neg.bbox[2] = neg_y_min;
         neg.bbox[3] = neg_y_max;
-        neg.bbox[4] = neg_z_min;
-        neg.bbox[5] = neg_z_max;
+            neg.bbox[4] = neg_z_min;
+            neg.bbox[5] = neg_z_max;
 
-        // triangles
-        for (int i = 0; i < (int)pos.triangles.size(); i++)
+            // triangles
+            {
+                profiler::ScopedTimer t("Clip_TriangleRemap");
+                for (int i = 0; i < (int)pos.triangles.size(); i++)
         {
             int f0, f1, f2;
             if (pos.triangles[i][0] >= 0)
@@ -907,10 +965,11 @@ namespace coacd
             else
                 f2 = -1 * neg.triangles[i][2] + neg_N - 1;
 
-            neg.triangles[i] = {f0, f1, f2};
-        }
+                neg.triangles[i] = {f0, f1, f2};
+                }
+            }
 
-        for (int i = 0; i < (int)final_triangles.size(); i++)
+            for (int i = 0; i < (int)final_triangles.size(); i++)
         {
             cut_area += Area(final_border[final_triangles[i][0] - 1], final_border[final_triangles[i][1] - 1], final_border[final_triangles[i][2] - 1]);
             pos.triangles.push_back({pos_N + border_map[final_triangles[i][0]] - 1,
@@ -919,11 +978,12 @@ namespace coacd
             neg.triangles.push_back({neg_N + border_map[final_triangles[i][2]] - 1,
                                      neg_N + border_map[final_triangles[i][1]] - 1,
                                      neg_N + border_map[final_triangles[i][0]] - 1});
+            }
+            delete[] pos_proj;
+            delete[] neg_proj;
+            delete[] neg_map;
+            delete[] pos_map;
         }
-        delete[] pos_proj;
-        delete[] neg_proj;
-        delete[] neg_map;
-        delete[] pos_map;
 
         return true;
     }

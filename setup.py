@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+import re
 import platform
 import subprocess
 
@@ -31,6 +32,21 @@ class CMakeBuild(build_ext):
         extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
         extdir = os.path.join(extdir, self.distribution.get_name())
 
+        # Verify CMake is available and check version
+        try:
+            cmake_version_output = subprocess.check_output(['cmake', '--version']).decode('utf-8')
+            cmake_version_line = cmake_version_output.split('\n')[0]
+            print(f"Using CMake: {cmake_version_line}")
+            
+            # Extract version and verify it's at least 3.5
+            version_match = re.search(r'cmake version (\d+)\.(\d+)', cmake_version_line)
+            if version_match:
+                major, minor = int(version_match.group(1)), int(version_match.group(2))
+                if major < 3 or (major == 3 and minor < 5):
+                    raise RuntimeError(f"CMake version 3.5 or higher is required. Found: {cmake_version_line}")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            raise RuntimeError("CMake not found. Please install CMake 3.5 or higher.")
+
         cfg = "Debug" if self.debug else "Release"
 
         cmake_generator = os.environ.get("CMAKE_GENERATOR", "")
@@ -45,6 +61,7 @@ class CMakeBuild(build_ext):
             "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
             "-DOPENVDB_CORE_SHARED=OFF",
             "-DTBB_TEST=OFF",
+            "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",  # Compatibility with CMake 4.2+
             f"-DCMAKE_CXX_FLAGS=-fPIC {'-static-libgcc -static-libstdc++' if system == 'linux' else '/MT /EHsc' if system == 'windows' else ''}"
         ]
         

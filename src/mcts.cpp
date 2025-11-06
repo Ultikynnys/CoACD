@@ -1,6 +1,8 @@
 #include <stdint.h>
+#include <atomic>
 #include "mcts.h"
 #include "process.h"
+#include "profiler.h"
 
 namespace coacd
 {
@@ -22,6 +24,11 @@ namespace coacd
     }
     Plane Part::get_one_move()
     {
+        if (next_choice >= (int)available_moves.size())
+        {
+            logger::error("get_one_move out of range: next_choice={} size={}", next_choice, (int)available_moves.size());
+            return Plane(1.0, 0.0, 0.0, 0.0);
+        }
         return available_moves[next_choice++];
     }
 
@@ -145,6 +152,8 @@ namespace coacd
         {
             vector<double> _current_costs;
             vector<Part> _current_parts;
+            _current_costs.reserve(current_parts.size() + 1);
+            _current_parts.reserve(current_parts.size() + 1);
             for (int i = 0; i < (int)current_parts.size(); i++)
             {
                 if (i != worst_part_idx)
@@ -635,39 +644,135 @@ namespace coacd
 
     bool ComputeBestRvClippingPlane(Model &m, Params &params, vector<Plane> &planes, Plane &bestplane, double &bestcost)
     {
+        profiler::ScopedTimer timer("MCTS_ComputeBestRvClippingPlane");
         if ((int)planes.size() == 0)
             return false;
+        
         double H_min = INF;
-        double cut_area;
-        bool flag;
-        for (int i = 0; i < (int)planes.size(); i++)
+        
+        // Adaptive sampling: limit plane evaluations for efficiency
+        int max_planes_to_eval = (int)planes.size();
+        if (max_planes_to_eval > 20) {
+            max_planes_to_eval = std::min(max_planes_to_eval, std::max(15, (int)(planes.size() * 0.5)));
+        }
+        
+        // Early stopping threshold
+        double early_stop_threshold = params.threshold * 0.8;
+        
+        // Shuffle to get random sampling
+        std::vector<int> indices(planes.size());
+        for (int i = 0; i < (int)planes.size(); i++) indices[i] = i;
+        std::shuffle(indices.begin(), indices.end(), coacd::random_engine);
+        
+        // Pre-filter: quick imbalance check to reduce candidate set; then order by balance closeness to 50/50
+        struct Cand { int idx; double score; };
+        std::vector<Cand> candidates;
+        candidates.reserve(max_planes_to_eval);
+        int n = (int)m.points.size();
+        for (int idx = 0; idx < max_planes_to_eval && idx < (int)planes.size(); idx++)
         {
-            Model pos, neg, posCH, negCH;
-
-            flag = Clip(m, pos, neg, planes[i], cut_area);
-            double H;
-            if (!flag)
-                H = INF;
-            else
+            int i = indices[idx];
+            double score = 0.0;
+            if (n > 0)
             {
-                if (pos.points.size() <= 0 || neg.points.size() <= 0)
-                    continue;
-
-                pos.ComputeAPX(posCH);
-                neg.ComputeAPX(negCH);
-
-                H = ComputeTotalRv(m, pos, posCH, neg, negCH, params.rv_k, planes[i]);
+                int sample = std::min(256, n);
+                int step = std::max(1, n / sample);
+                int pos_cnt = 0, neg_cnt = 0;
+                for (int s = 0; s < n; s += step)
+                {
+                    const auto &pt = m.points[s];
+                    double side = planes[i].a * pt[0] + planes[i].b * pt[1] + planes[i].c * pt[2] + planes[i].d;
+                    if (side >= 0) pos_cnt++;
+                    else neg_cnt++;
+                }
+                int tot = pos_cnt + neg_cnt;
+                if (tot > 0)
+                {
+                    double ratio_pos = pos_cnt * 1.0 / tot;
+                    if (ratio_pos < 0.05 || ratio_pos > 0.95)
+                        continue; // skip extremes
+                    score = std::abs(ratio_pos - 0.5);
+                }
             }
-
-            if (H < H_min)
-            {
-                H_min = H;
-                bestplane = planes[i];
-                bestcost = H;
-            }
+            candidates.push_back({i, score});
         }
 
-        return true;
+        // Sort candidates by increasing imbalance (i.e., most balanced first)
+        std::sort(candidates.begin(), candidates.end(), [](const Cand& a, const Cand& b){ return a.score < b.score; });
+        std::vector<int> filtered_indices;
+        filtered_indices.reserve(candidates.size());
+        for (const auto& c : candidates) filtered_indices.push_back(c.idx);
+        
+        if (filtered_indices.empty())
+            return false;
+        
+        // Parallel evaluation of candidate planes
+        std::vector<double> costs(filtered_indices.size(), INF);
+        std::atomic<bool> found_good_plane{false};
+        
+#ifdef _OPENMP
+#pragma omp parallel for schedule(dynamic, 1) shared(found_good_plane, costs, filtered_indices, m, params, planes, early_stop_threshold)
+#endif
+        for (int idx = 0; idx < (int)filtered_indices.size(); idx++)
+        {
+            // Early exit if another thread found a great plane
+            if (found_good_plane.load(std::memory_order_relaxed))
+                continue;
+                
+            int i = filtered_indices[idx];
+            double cut_area;
+            Model pos, neg, posCH, negCH;
+            
+            bool flag;
+            {
+                profiler::ScopedTimer t("MCTS_PlaneEval_Clip");
+                flag = Clip(m, pos, neg, planes[i], cut_area, true);
+            }
+            
+            if (!flag || pos.points.size() <= 0 || neg.points.size() <= 0)
+            {
+                costs[idx] = INF;
+                continue;
+            }
+            
+            {
+                profiler::ScopedTimer t("MCTS_PlaneEval_ComputeAPX");
+                pos.ComputeAPX(posCH);
+                neg.ComputeAPX(negCH);
+            }
+            
+            double H;
+            {
+                profiler::ScopedTimer t("MCTS_PlaneEval_ComputeTotalRv");
+                H = ComputeTotalRv(m, pos, posCH, neg, negCH, params.rv_k, planes[i]);
+            }
+            
+            costs[idx] = H;
+            
+            // Signal early stop if we found an excellent plane
+            if (H < early_stop_threshold)
+                found_good_plane.store(true, std::memory_order_relaxed);
+        }
+        
+        // Find best plane from parallel results
+        int best_idx = -1;
+        for (int idx = 0; idx < (int)costs.size(); idx++)
+        {
+            if (costs[idx] < H_min)
+            {
+                H_min = costs[idx];
+                best_idx = idx;
+            }
+        }
+        
+        if (best_idx >= 0)
+        {
+            bestplane = planes[filtered_indices[best_idx]];
+            bestcost = H_min;
+            return true;
+        }
+        
+        return false;
     }
 
     double ComputeReward(Params &params, double meshCH_v, vector<double> &current_costs, vector<Part> &current_parts, int &worst_part_idx, double ori_mesh_area, double ori_mesh_volume)
@@ -690,6 +795,7 @@ namespace coacd
 
     Node *tree_policy(Node *node, double initial_cost, bool &flag)
     {
+        profiler::ScopedTimer timer("MCTS_tree_policy");
         while (node->get_state()->is_terminal() == false)
         {
             if (node->is_all_expand())
@@ -706,8 +812,9 @@ namespace coacd
         return node;
     }
 
-    double default_policy(Node *node, Params &params, vector<Plane> &current_path) // evaluate the quality until the mesh is all cut MAX_ROUND times
+    double default_policy(Node *node, Params &params, vector<Plane> &current_path)
     {
+        profiler::ScopedTimer timer("MCTS_default_policy");
         State *original_state = node->get_state();
         State current_state = *original_state;
         double current_state_reward;
@@ -718,7 +825,7 @@ namespace coacd
             vector<Plane> planes;
             Plane bestplane;
             double bestcost, cut_area;
-            ComputeAxesAlignedClippingPlanes(current_state.current_parts[current_state.worst_part_idx].current_mesh, MCTS_RANDOM_CUT, planes);
+            planes = current_state.current_parts[current_state.worst_part_idx].available_moves;
             if ((int)planes.size() == 0)
             {
                 break;
@@ -726,7 +833,11 @@ namespace coacd
             ComputeBestRvClippingPlane(current_state.current_parts[current_state.worst_part_idx].current_mesh, params, planes, bestplane, bestcost);
 
             Model pos, neg, posCH, negCH;
-            bool clipf = Clip(current_state.current_parts[current_state.worst_part_idx].current_mesh, pos, neg, bestplane, cut_area);
+            bool clipf;
+            {
+                profiler::ScopedTimer t("MCTS_default_policy_Clip");
+                clipf = Clip(current_state.current_parts[current_state.worst_part_idx].current_mesh, pos, neg, bestplane, cut_area, true);
+            }
             if (!clipf)
                 throw runtime_error("Wrong MCTS clip proposal!");
             current_path.push_back(bestplane);
@@ -740,10 +851,17 @@ namespace coacd
                     _current_parts.push_back(current_state.current_parts[i]);
                 }
             }
-            pos.ComputeAPX(posCH);
-            neg.ComputeAPX(negCH);
-            double cost_pos = ComputeRv(pos, posCH, params.rv_k);
-            double cost_neg = ComputeRv(neg, negCH, params.rv_k);
+            {
+                profiler::ScopedTimer t("MCTS_default_policy_ComputeAPX");
+                pos.ComputeAPX(posCH);
+                neg.ComputeAPX(negCH);
+            }
+            double cost_pos, cost_neg;
+            {
+                profiler::ScopedTimer t("MCTS_default_policy_ComputeRv");
+                cost_pos = ComputeRv(pos, posCH, params.rv_k);
+                cost_neg = ComputeRv(neg, negCH, params.rv_k);
+            }
 
             Part part_pos(params, pos);
             Part part_neg(params, neg);
@@ -769,6 +887,7 @@ namespace coacd
 
     Node *expand(Node *node)
     {
+        profiler::ScopedTimer timer("MCTS_expand");
         State new_state = node->get_state()->get_next_state_with_random_choice();
 
         Node *sub_node = new Node(node->params);
@@ -780,6 +899,7 @@ namespace coacd
 
     Node *best_child(Node *node, bool is_exploration, double initial_cost)
     {
+        profiler::ScopedTimer timer("MCTS_best_child");
         double best_score = INF;
         Node *best_sub_node = NULL;
 
@@ -809,6 +929,7 @@ namespace coacd
 
     void backup(Node *node, double reward, vector<Plane> &current_path, vector<Plane> &best_path)
     {
+        profiler::ScopedTimer timer("MCTS_backup");
         vector<Plane> tmp_path;
         int N = (int)current_path.size();
         for (int i = 0; i < N; i++)
@@ -853,6 +974,12 @@ namespace coacd
         double cost = ComputeRv(initial_mesh, initial_ch, params.rv_k) / params.mcts_max_depth;
         vector<Plane> current_path;
 
+        // Early stopping on diminishing returns
+        double best_reward = INF;
+        const double improve_tol = 0.01; // 1% improvement threshold
+        int patience = std::max(20, computation_budget / 4);
+        int stale = 0;
+
         for (int i = 0; i < computation_budget; i++)
         {
             current_path.clear();
@@ -860,6 +987,18 @@ namespace coacd
             Node *expand_node = tree_policy(node, cost, flag);
             double reward = default_policy(expand_node, params, current_path);
             backup(expand_node, reward, current_path, best_path);
+
+            // Track improvement (we minimize reward)
+            if (reward + 1e-12 < best_reward * (1.0 - improve_tol)) {
+                best_reward = reward;
+                stale = 0;
+            } else {
+                stale++;
+            }
+
+            if (stale >= patience) {
+                break;
+            }
         }
         Node *best_next_node = best_child(node, false);
 

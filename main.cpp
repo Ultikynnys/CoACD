@@ -3,18 +3,37 @@
 #include <sstream>
 #include <string>
 #include <time.h>
+#include <cstdlib>
+#include <cstring>
 
 #if WITH_3RD_PARTY_LIBS
   #include "src/preprocess.h"
 #endif
 #include "src/process.h"
 #include "src/logger.h"
+#include "src/crash_handler.h"
+#include "src/profiler.h"
 
 using namespace std;
 using namespace coacd;
 
 int main(int argc, char *argv[])
 {
+  coacd::install_crash_handler();
+  logger::info("Crash handler installed");
+  const char* dbg = std::getenv("COACD_DEBUG");
+  if (dbg && *dbg && strcmp(dbg, "0") != 0) {
+    logger::info("Debug mode enabled (COACD_DEBUG={})", dbg);
+  }
+  
+  // Enable profiling if requested
+  const char* profile = std::getenv("COACD_PROFILE");
+  bool profiling_enabled = (profile && *profile && strcmp(profile, "0") != 0);
+  if (profiling_enabled) {
+    profiler::enable();
+    logger::info("Profiling enabled (COACD_PROFILE={})", profile);
+  }
+  
   Params params;
 
   // Model files
@@ -192,6 +211,12 @@ int main(int argc, char *argv[])
 
   SaveVRML(wrlName, parts, params);
   SaveOBJ(objName, parts, params);
+
+  // Print profiling summary if enabled
+  if (profiling_enabled) {
+    logger::info("");
+    profiler::print_summary();
+  }
 
   return 0;
 }
