@@ -56,6 +56,11 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address")
 endif()
 
+# Suppress OpenVDB template warnings on modern AppleClang (Xcode 16+)
+if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-template-arg-list-after-template-kw")
+endif()
+
 if(WITH_3RD_PARTY_LIBS)
     include(zlib)
     include(boost)

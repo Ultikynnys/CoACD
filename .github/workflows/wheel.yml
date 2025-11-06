@@ -52,6 +52,7 @@ jobs:
           # Use default repair commands (cibuildwheel handles platform detection automatically)
 
       - name: List Build Results
+        shell: bash
         run: ls -lh wheelhouse
 
       - name: Verify Wheel Contents
