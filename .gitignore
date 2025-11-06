@@ -9,3 +9,4 @@ coacd.egg-info/*
 *DS_Store
 build_vs/
 *.dmp
+.env
