@@ -58,7 +58,11 @@ endif()
 
 # Suppress OpenVDB template warnings on modern AppleClang (Xcode 16+)
 if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-template-arg-list-after-template-kw")
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag("-Wno-missing-template-arg-list-after-template-kw" HAS_NO_MISSING_TEMPLATE_ARG_FLAG)
+    if(HAS_NO_MISSING_TEMPLATE_ARG_FLAG)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-template-arg-list-after-template-kw")
+    endif()
 endif()
 
 if(WITH_3RD_PARTY_LIBS)
