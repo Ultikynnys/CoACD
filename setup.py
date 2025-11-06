@@ -123,5 +123,14 @@ setup(
     cmdclass={"build_ext": CMakeBuild, "bdist_wheel": bdist_wheel_abi3},
     zip_safe=False,
     package_dir={"coacd": os.path.join("python/package")},
+    package_data={
+        "coacd": [
+            "*.so",      # Linux shared library
+            "*.pyd",     # Windows extension
+            "*.dll",     # Windows DLL
+            "*.dylib",   # macOS dynamic library
+        ]
+    },
+    include_package_data=True,
     scripts=["python/package/bin/coacd"]
 )
