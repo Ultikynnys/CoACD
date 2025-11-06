@@ -55,15 +55,23 @@ class CMakeBuild(build_ext):
         cmake_args = [
             "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={}".format(extdir),
             "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=$<1:{}>".format(extdir),
-            "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64",
             # "-DPYTHON_EXECUTABLE={}".format(sys.executable),
             "-DCMAKE_BUILD_TYPE={}".format(cfg),  # not used on MSVC, but no harm
-            "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
             "-DOPENVDB_CORE_SHARED=OFF",
             "-DTBB_TEST=OFF",
             "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",  # Compatibility with CMake 4.2+
-            f"-DCMAKE_CXX_FLAGS=-fPIC {'-static-libgcc -static-libstdc++' if system == 'linux' else '/MT /EHsc' if system == 'windows' else ''}"
         ]
+        
+        # Platform-specific flags
+        if system == 'windows':
+            cmake_args.append("-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded")
+        elif system == 'linux':
+            cmake_args.append("-DCMAKE_CXX_FLAGS=-fPIC -static-libgcc -static-libstdc++")
+        elif system == 'darwin':
+            cmake_args.append("-DCMAKE_CXX_FLAGS=-fPIC")
+        
+        # Let cibuildwheel control the architecture (don't force universal binaries)
+        # CMAKE_OSX_ARCHITECTURES is set by cibuildwheel automatically
         
         build_args = []
 
