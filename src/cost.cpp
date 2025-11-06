@@ -7,7 +7,7 @@ namespace coacd
 
   constexpr double Pi = 3.14159265;
 
-  inline double ComputeRv(Model &tmesh1, Model &tmesh2, double k, double epsilon)
+  double ComputeRv(Model &tmesh1, Model &tmesh2, double k, double epsilon)
   {
     double v1 = MeshVolume(tmesh1);
     double v2 = MeshVolume(tmesh2);
@@ -15,7 +15,7 @@ namespace coacd
     return d;
   }
 
-  inline double ComputeRv(Model &cvx1, Model &cvx2, Model &cvxCH, double k, double epsilon)
+  double ComputeRv(Model &cvx1, Model &cvx2, Model &cvxCH, double k, double epsilon)
   {
     double v1, v2, v3;
 
