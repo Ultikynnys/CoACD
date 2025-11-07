@@ -587,11 +587,16 @@ namespace coacd
     {
         AlignToPrincipalAxes();
         double x_min = INF, x_max = -INF, y_min = INF, y_max = -INF, z_min = INF, z_max = -INF;
+        
+        // Apply PCA transformation correctly: center -> rotate
         for (int i = 0; i < (int)points.size(); i++)
         {
-            double x = points[i][0];
-            double y = points[i][1];
-            double z = points[i][2];
+            // Step 1: Center points by subtracting barycenter
+            double x = points[i][0] - barycenter[0];
+            double y = points[i][1] - barycenter[1];
+            double z = points[i][2] - barycenter[2];
+            
+            // Step 2: Apply rotation to centered points
             points[i][0] = m_rot[0][0] * x + m_rot[1][0] * y + m_rot[2][0] * z;
             points[i][1] = m_rot[0][1] * x + m_rot[1][1] * y + m_rot[2][1] * z;
             points[i][2] = m_rot[0][2] * x + m_rot[1][2] * y + m_rot[2][2] * z;
@@ -664,14 +669,22 @@ namespace coacd
 
     void Model::RevertPCA(array<array<double, 3>, 3> rot)
     {
+        // Apply inverse PCA transformation: un-rotate -> un-center
         for (int i = 0; i < (int)points.size(); i++)
         {
             double x = points[i][0];
             double y = points[i][1];
             double z = points[i][2];
-            points[i][0] = rot[0][0] * x + rot[0][1] * y + rot[0][2] * z;
-            points[i][1] = rot[1][0] * x + rot[1][1] * y + rot[1][2] * z;
-            points[i][2] = rot[2][0] * x + rot[2][1] * y + rot[2][2] * z;
+            
+            // Step 1: Apply inverse rotation (transpose of rotation matrix)
+            double rx = rot[0][0] * x + rot[0][1] * y + rot[0][2] * z;
+            double ry = rot[1][0] * x + rot[1][1] * y + rot[1][2] * z;
+            double rz = rot[2][0] * x + rot[2][1] * y + rot[2][2] * z;
+            
+            // Step 2: Add back barycenter offset
+            points[i][0] = rx + barycenter[0];
+            points[i][1] = ry + barycenter[1];
+            points[i][2] = rz + barycenter[2];
         }
     }
 
