@@ -6,8 +6,8 @@
 
 namespace coacd {
 
-// Version - Package: coacd_U (Ultikynnys Edition)
-constexpr const char* COACD_VERSION = "1.0.8";
+// Version - Package: coacd_u (Ultikynnys Edition)
+constexpr const char* COACD_VERSION = "1.0.9";
 
 #if _WIN32
 #define COACD_API __declspec(dllexport)

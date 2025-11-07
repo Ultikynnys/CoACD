@@ -730,12 +730,17 @@ namespace coacd
         return volume;
     }
 
-    void RecoverParts(vector<Model> &meshes, vector<double> bbox, array<array<double, 3>, 3> rot, Params &params)
+    void RecoverParts(vector<Model> &meshes, vector<double> bbox, array<array<double, 3>, 3> rot, Params &params, array<double, 3> barycenter)
     {
         for (int i = 0; i < (int)meshes.size(); i++)
         {
             if (params.pca)
+            {
+                meshes[i].barycenter[0] = barycenter[0];
+                meshes[i].barycenter[1] = barycenter[1];
+                meshes[i].barycenter[2] = barycenter[2];
                 meshes[i].RevertPCA(rot);
+            }
             meshes[i].Recover(bbox);
         }
     }

@@ -11,7 +11,7 @@ import numpy as np
 import sys
 import os
 import argparse
-import coacd_U as coacd
+import coacd_u as coacd
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

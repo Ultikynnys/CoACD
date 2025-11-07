@@ -1,133 +1,76 @@
-# Approximate Convex Decomposition for 3D Meshes with Collision-Aware Concavity and Tree Search [SIGGRAPH2022]
- [\[project\]](https://colin97.github.io/CoACD/) [\[paper\]](https://arxiv.org/pdf/2205.02961.pdf) [\[video\]](https://www.youtube.com/watch?v=r12O0z0723s)
+# Approximate Convex Decomposition for 3D Meshes with Collision-Aware Concavity and Tree Search
 
- [![Build](https://github.com/SarahWeiii/CoACD/actions/workflows/build.yml/badge.svg)](https://github.com/SarahWeiii/CoACD/actions/workflows/build.yml)
- ![PyPI - Downloads](https://img.shields.io/pypi/dm/coacd)
+ [![Wheel](https://github.com/Ultikynnys/CoACD/actions/workflows/wheel.yml/badge.svg)](https://github.com/Ultikynnys/CoACD/actions/workflows/wheel.yml)
 
-[***News***] CoACD (both Python and C++) is supported on Linux (x86_64), Windows (amd64) and MacOS (x86_64 & apple sillicon) now!
+## Ultikynnys Variant
 
-[***News***] CoACD is now supported in Unity as a package!
+**This is the Ultikynnys optimized variant of CoACD** - the main workhorse behind the [Blender implementation of the addon](https://superhivemarket.com/products/coacd--advanced-convex-collision-generator). 
 
-[***News***] CoACD adds "auto" pre-processing mode, which produces better results for manifold meshes!
+### Key Improvements
+- **3-10x faster** than the original algorithm due to optimized iteration resolution
+- **Fixed PCA offset bug** - colliders no longer generate at translational offsets when PCA mode is enabled
+- Fully compatible with the original CoACD API
+
+### Support Development
+If you find this variant useful, please consider supporting development:
+
+
+
+You can also support by purchasing the [Blender addon](https://superhivemarket.com/products/coacd--advanced-convex-collision-generator) or buying me a [ko-fi](https://ko-fi.com/r60dr60d)!
+
+---
 
 Approximate convex decomposition enables efficient geometry processing algorithms specifically designed for convex shapes (e.g., collision detection). We propose a method that is better to preserve collision conditions of the input shape with fewer components. It thus supports delicate and efficient object interaction in downstream applications.
 
 ![avatar](assets/teaser.png)
 
-## PyPI
+## Usage
 
-### (1) Installation
+### Installation
 
-```
-pip install coacd
-```
+Download the prebuilt wheel for your platform from [GitHub Releases](https://github.com/ultikynnys/coacd/releases), then install:
 
-### (2) Usage
-```
-import coacd
-
-mesh = trimesh.load(input_file, force="mesh")
-mesh = coacd.Mesh(mesh.vertices, mesh.faces)
-parts = coacd.run_coacd(mesh) # a list of convex hulls.
-```
-The complete example script is in `python/package/bin/coacd`, run it by the following command:
-```
-cd python
-python package/bin/coacd -i $InputFile -o $OutputFile
+```bash
+pip install coacd_u-1.0.9-cp312-abi3-win_amd64.whl
 ```
 
-## Unity
+Wheels are available for:
+- **Windows**: `coacd_u-1.0.9-cp312-abi3-win_amd64.whl`
+- **Linux**: `coacd_u-1.0.9-cp312-abi3-linux_x86_64.whl`
+- **macOS**: `coacd_u-1.0.9-cp312-abi3-macosx_*.whl`
 
-Supporting Unity 2020.1 or later.
-See the example project in [`unity` branch](https://github.com/SarahWeiii/CoACD/tree/unity).
+### Python Example
 
-<video src="https://github.com/SarahWeiii/CoACD/assets/23738781/bda0e0bb-b55c-4ccc-b6df-33d09a2bd7c2" controls="controls" style="max-width: 400px;" autoplay>
-</video>
+```python
+import coacd_u as coacd
 
-### (1) Installation
+# Load your mesh (using trimesh as an example)
+import trimesh
+mesh = trimesh.load("your_model.obj", force="mesh")
 
-1. Open the Package Manager from `Window` -> `Package Manager`.
-2. Find and click the + button in the upper lefthand corner of the window. Select `Add package from git URL`.
-3. Enter the following URL:
+# Create CoACD mesh
+coacd_mesh = coacd.Mesh(mesh.vertices, mesh.faces)
+
+# Run decomposition
+parts = coacd.run_coacd(
+    coacd_mesh,
+    threshold=0.05,           # Concavity threshold
+    max_convex_hull=-1,       # Max number of convex hulls
+    preprocess_mode="auto",   # Preprocessing mode
+    preprocess_resolution=50, # Preprocessing resolution
+    resolution=2000,          # Sampling resolution
+    mcts_nodes=20,            # MCTS nodes
+    mcts_iterations=150,      # MCTS iterations
+    mcts_max_depth=3,         # MCTS max depth
+    pca=False,                # Enable PCA preprocessing
+    merge=True,               # Enable merge post-processing
+    seed=0                    # Random seed
+)
+
+# parts is a list of [vertices, faces] for each convex hull
+for i, (vertices, faces) in enumerate(parts):
+    print(f"Part {i}: {len(vertices)} vertices, {len(faces)} faces")
 ```
-https://github.com/SarahWeiii/CoACD.git?path=/Packages/info.flandre.coacd#unity
-```
-4. Click `Add`.
-
-### (2) Usage
-
-1. Add a `CoACD` component to your object. You can tweak the parameters in the editor.
-
-<img width="320" alt="image" src="assets/unity_1.png">
-
-2. Right click the component header lane. Then select `Generate Collision Meshes` or
-   `Generate Collision Meshes for Hierarchy` to generate collision for the current object or
-   all children of the current object that contains a `MeshFilter`, respectively.
-
-<img width="320" alt="image" src="assets/unity_2.png">
-
-3. Unity mesh colliders will be created in the scene under `Collision` as a child of each object.
-
-<img width="640" alt="image" src="assets/unity_3.png">
-
-4. Alternatively, you can call the runtime API as a method of the `CoACD` component:
-
-```csharp
-public List<Mesh> RunACD(Mesh mesh);
-```
-
-## Compile from source
-
-### (1) Clone the code
-
-```
-git clone --recurse-submodules https://github.com/SarahWeiii/CoACD.git
-```
-
-### (2) Dependencies
-Install dependencies: `git` and `cmake >= 3.24`.
-Recommended compilers: Linux `g++ >= 9, < 12`; `clang` on MacOS `10.14` or higher; `MSVC 2019/2022` on Windows.
-
-### (3) Compile
-
-First create the build directory:
-
-```
-cd CoACD \
-&& mkdir build \
-&& cd build \
-```
-
-Then run `cmake`. On Linux and MacOS:
-
-```
-cmake .. -DCMAKE_BUILD_TYPE=Release \
-&& make main -j
-```
-
-On Windows (MSVC):
-
-```
-cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DOPENVDB_CORE_SHARED=OFF -DTBB_TEST=OFF -DCMAKE_CXX_FLAGS="/MT /EHsc"
-cmake --build . --target main --config Release
-```
-
-### (4) Quick start
-We provide a set of default parameters, and you only need to specify the input and output path. You can take an arbitrary mesh as input (in `.obj` format, no need to be a manifold) and run the algorithm by the following command:
-```
-./main -i PATH_OF_YOUR_MESH -o PATH_OF_OUTPUT
-```
-
-The generated convex components (in both `.obj` and `.wrl` formats) will be saved in PATH_OF_OUTPUT.
-
-## Examples
-
-We provide some example meshes and a `run_example.sh`, and the results will be saved in the `outputs` folder.
-```
-bash run_example.sh
-```
-* You can adjust the threshold by `-t` to see results with different quality.
-* Three of the examples are from [PartNet-M](https://sapien.ucsd.edu/browse) (Bottle.obj, Kettle.obj, KitchenPot.obj), which are non-manifold. Two of them are from [Thingi10K](https://ten-thousand-models.appspot.com/) (Octocat-v2.obj, SnowFlake.obj), which are both 2-manifold.
 
 ## Parameters
 
@@ -154,17 +97,14 @@ Here is the description of the parameters (sorted by importance).
 * `-am/--approximate-mode`: approximation shape type ("ch" for convex hulls, "box" for cubes), default = "ch". I would recommend using a 2x threshold than it in convex for box approximation.
 * `--seed`: random seed used for sampling, default = random().
 
-An example of changing the parameters:
-```
-./main -i PATH_OF_YOUR_MESH -o PATH_OF_OUTPUT -t 0.05 -mi 200 -md 4 -mn 25
-```
+These parameters are exposed in the Blender addon interface, allowing you to fine-tune the decomposition based on your specific needs.
 
 Parameter tuning *tricks*: 
 1. In most cases, you only need to adjust the `threshold` (0.01~1) to balance the level of detail and the number of decomposed components. A higher value gives coarser results, and a lower value gives finer-grained results. You can refer to Fig. 14 in our paper for more details.
-2. If your input mesh is not manifold, you should also adjust the `prep-resolution` (20~100) to control the detail level of the pre-processed mesh. A larger value can make the preprocessed mesh closer to the original mesh but also lead to more triangles and longer runtime.
-3. The default parameters are fast versions. If you care less about running time but more about the number of components, try to increase `searching depth (-md)`, `searching node (-mn)` and `searching iteration (-mi)` for better cutting strategies.
-4. Make sure your input mesh is 2-manifold solid if you set `-pm` to `off`. Skipping manifold pre-processing can better preserve input details and make the process faster but the algorithm may crush or generate wrong results if the input mesh is not 2-manifold.
-5. `--seed` is used for reproduction of the same results as our algorithm is stochastic.
+2. If your input mesh is not manifold, you should also adjust the `preprocess_resolution` (20~100) to control the detail level of the pre-processed mesh. A larger value can make the preprocessed mesh closer to the original mesh but also lead to more triangles and longer runtime.
+3. The default parameters are fast versions. If you care less about running time but more about the number of components, try to increase `mcts_max_depth`, `mcts_nodes` and `mcts_iterations` for better cutting strategies.
+4. Make sure your input mesh is 2-manifold solid if you set `preprocess_mode` to `"off"`. Skipping manifold pre-processing can better preserve input details and make the process faster but the algorithm may crash or generate wrong results if the input mesh is not 2-manifold.
+5. `seed` is used for reproduction of the same results as our algorithm is stochastic.
 
 ## Citation
 

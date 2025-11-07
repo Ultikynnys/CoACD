@@ -98,8 +98,8 @@ class CMakeBuild(build_ext):
 
 
 setup(
-    name="coacd_U",
-    version="1.0.8",
+    name="coacd_u",
+    version="1.0.9",
     author_email="xiwei@ucsd.edu",
     keywords="collision convex decomposition",
     description="Approximate Convex Decomposition for 3D Meshes with Collision-Aware Concavity and Tree Search",
@@ -124,15 +124,15 @@ setup(
     ],
     license="MIT",
     url="https://colin97.github.io/CoACD/",
-    packages=["coacd_U"],
+    packages=["coacd_u"],
     python_requires=">=3.9",
     install_requires=["numpy"],
-    ext_modules=[CMakeExtension("coacd_U")],
+    ext_modules=[CMakeExtension("coacd_u")],
     cmdclass={"build_ext": CMakeBuild, "bdist_wheel": bdist_wheel_abi3},
     zip_safe=False,
-    package_dir={"coacd_U": os.path.join("python/package")},
+    package_dir={"coacd_u": os.path.join("python/package")},
     package_data={
-        "coacd_U": [
+        "coacd_u": [
             "*.so",      # Linux shared library
             "*.pyd",     # Windows extension
             "*.dll",     # Windows DLL

@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
 
   vector<Model> parts = Compute(m, params);
 
-  RecoverParts(parts, bbox, rot, params);
+  RecoverParts(parts, bbox, rot, params, m.barycenter);
 
   string objName = regex_replace(params.output_name, regex("wrl"), "obj");
   string wrlName = regex_replace(params.output_name, regex("obj"), "wrl");

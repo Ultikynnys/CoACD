@@ -5,10 +5,16 @@
 
 namespace coacd {
 void RecoverParts(vector<Model> &meshes, vector<double> bbox,
-                  array<array<double, 3>, 3> rot) {
+                  array<array<double, 3>, 3> rot, bool pca,
+                  const double barycenter[3]) {
   for (int i = 0; i < (int)meshes.size(); i++) {
+    if (pca) {
+      meshes[i].barycenter[0] = barycenter[0];
+      meshes[i].barycenter[1] = barycenter[1];
+      meshes[i].barycenter[2] = barycenter[2];
+      meshes[i].RevertPCA(rot);
+    }
     meshes[i].Recover(bbox);
-    meshes[i].RevertPCA(rot);
   }
 }
 
@@ -90,7 +96,7 @@ std::vector<Mesh> CoACD(Mesh const &input, double threshold,
   }
 
   vector<Model> parts = Compute(m, params);
-  RecoverParts(parts, bbox, rot);
+  RecoverParts(parts, bbox, rot, pca, m.barycenter);
 
   std::vector<Mesh> result;
   for (auto &p : parts) {

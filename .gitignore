@@ -10,3 +10,4 @@ coacd.egg-info/*
 build_vs/
 *.dmp
 .env
+coacd_u.egg-info/
