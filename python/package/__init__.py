@@ -1,6 +1,8 @@
 import numpy as np
 import os
 
+__version__ = "1.0.8u"
+
 import ctypes
 from ctypes import (
     Structure,

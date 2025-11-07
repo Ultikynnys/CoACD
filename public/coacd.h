@@ -6,6 +6,9 @@
 
 namespace coacd {
 
+// Version
+constexpr const char* COACD_VERSION = "1.0.8u";
+
 #if _WIN32
 #define COACD_API __declspec(dllexport)
 #else
