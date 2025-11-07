@@ -1,7 +1,7 @@
 import numpy as np
 import os
 
-__version__ = "1.0.8u"
+__version__ = "1.0.8"
 
 import ctypes
 from ctypes import (
