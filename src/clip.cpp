@@ -184,21 +184,80 @@ namespace coacd
             y_max = max(y_max, py);
         }
 
-        int borderN = (int)points.size();
+        // Compute a scale-relative tolerance for duplicate detection
+        double scale = max(x_max - x_min, y_max - y_min);
+        double eps = max(scale * 1e-10, 1e-14);
+
+        // Build duplicate vertex mapping: vertexRemap[i] = canonical index for vertex i
+        vector<int> vertexRemap(points.size());
+        for (int i = 0; i < (int)points.size(); i++)
+            vertexRemap[i] = i;
+
+        for (int i = 0; i < (int)points.size(); i++)
+        {
+            if (vertexRemap[i] != i)
+                continue; // already remapped to an earlier vertex
+            for (int j = i + 1; j < (int)points.size(); j++)
+            {
+                if (vertexRemap[j] != j)
+                    continue; // already remapped
+                double dx = points[i][0] - points[j][0];
+                double dy = points[i][1] - points[j][1];
+                if (dx * dx + dy * dy < eps * eps)
+                {
+                    vertexRemap[j] = i; // merge j into i
+                }
+            }
+        }
+
+        // Build unique points list and old-to-new index mapping
+        vector<array<double, 2>> uniquePoints;
+        vector<int> oldToNew(points.size(), -1);
+        for (int i = 0; i < (int)points.size(); i++)
+        {
+            int canonical = vertexRemap[i];
+            if (oldToNew[canonical] < 0)
+            {
+                oldToNew[canonical] = (int)uniquePoints.size();
+                uniquePoints.push_back(points[canonical]);
+            }
+            oldToNew[i] = oldToNew[canonical];
+        }
+
+        // Remap edges and filter out degenerate edges (same vertex after remap)
+        vector<pair<int, int>> validEdges;
+        validEdges.reserve(border_edges.size());
+        for (const auto& e : border_edges)
+        {
+            int v1 = oldToNew[e.first - 1];  // border_edges uses 1-based indexing
+            int v2 = oldToNew[e.second - 1];
+            if (v1 != v2)
+            {
+                validEdges.push_back({v1 + 1, v2 + 1}); // convert back to 1-based
+            }
+        }
+
+        // Check if we have enough points and edges for triangulation
+        if (uniquePoints.size() < 3 || validEdges.empty())
+        {
+            return 1; // cannot triangulate
+        }
+
+        int borderN = (int)points.size(); // original size for later vertex addition
 
         CDT::Triangulation<double> cdt;
         try
         {
             cdt.insertVertices(
-                points.begin(),
-                points.end(),
+                uniquePoints.begin(),
+                uniquePoints.end(),
                 [](const std::array<double, 2> &p)
                 { return p[0]; },
                 [](const std::array<double, 2> &p)
                 { return p[1]; });
             cdt.insertEdges(
-                border_edges.begin(),
-                border_edges.end(),
+                validEdges.begin(),
+                validEdges.end(),
                 [](const std::pair<int, int> &p)
                 { return (int)p.first - 1; },
                 [](const std::pair<int, int> &p)
@@ -210,14 +269,34 @@ namespace coacd
             return 2;
         }
 
-        for (size_t i = 0; i < (size_t)cdt.triangles.size(); i++)
+        // Build reverse mapping from unique indices to one of the original indices
+        // (we pick the first one that maps to each unique vertex)
+        vector<int> newToOld(uniquePoints.size(), -1);
+        for (int i = 0; i < (int)points.size(); i++)
         {
-            border_triangles.push_back({(int)cdt.triangles[i].vertices[0] + 1,
-                                        (int)cdt.triangles[i].vertices[1] + 1,
-                                        (int)cdt.triangles[i].vertices[2] + 1});
+            int newIdx = oldToNew[i];
+            if (newToOld[newIdx] < 0)
+            {
+                newToOld[newIdx] = i;
+            }
         }
 
-        for (int i = (int)border.size(); i < borderN; i++)
+        for (size_t i = 0; i < (size_t)cdt.triangles.size(); i++)
+        {
+            int v0 = (int)cdt.triangles[i].vertices[0];
+            int v1 = (int)cdt.triangles[i].vertices[1];
+            int v2 = (int)cdt.triangles[i].vertices[2];
+            
+            // Map unique indices back to original indices (or to new vertex indices from CDT)
+            int orig0 = (v0 < (int)uniquePoints.size()) ? newToOld[v0] : (borderN + (v0 - (int)uniquePoints.size()));
+            int orig1 = (v1 < (int)uniquePoints.size()) ? newToOld[v1] : (borderN + (v1 - (int)uniquePoints.size()));
+            int orig2 = (v2 < (int)uniquePoints.size()) ? newToOld[v2] : (borderN + (v2 - (int)uniquePoints.size()));
+            
+            border_triangles.push_back({orig0 + 1, orig1 + 1, orig2 + 1});
+        }
+
+        // Handle vertices added by CDT (Steiner points)
+        for (size_t i = uniquePoints.size(); i < cdt.vertices.size(); i++)
         {
             double x, y, z;
             CDT::V2d<double> vertex = cdt.vertices[i];
