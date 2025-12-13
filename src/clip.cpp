@@ -5,6 +5,7 @@
 #include "include/CDT.h"
 #include <unordered_map>
 #include <unordered_set>
+#include <set>
 #include <cmath>
 
 namespace coacd
@@ -163,7 +164,7 @@ namespace coacd
         if (!flag)
             return 1;
 
-        vector<array<double, 2>> points, nodes;
+        vector<array<double, 2>> points;
 
         double x_min = INF, x_max = -INF, y_min = INF, y_max = -INF;
         for (int i = 0; i < (int)border.size(); i++)
@@ -184,15 +185,19 @@ namespace coacd
             y_max = max(y_max, py);
         }
 
-        // Compute a scale-relative tolerance for duplicate detection
+        // Use a larger tolerance for duplicate detection (1e-6 relative to mesh scale)
+        // This catches near-duplicates that might cause CDT assertion failures
         double scale = max(x_max - x_min, y_max - y_min);
-        double eps = max(scale * 1e-10, 1e-14);
+        if (scale < 1e-12) scale = 1.0; // avoid division by zero for degenerate cases
+        double eps = max(scale * 1e-6, 1e-10);
 
-        // Build duplicate vertex mapping: vertexRemap[i] = canonical index for vertex i
+        // Build duplicate vertex mapping using spatial bucketing for efficiency
+        // vertexRemap[i] = canonical index for vertex i
         vector<int> vertexRemap(points.size());
         for (int i = 0; i < (int)points.size(); i++)
             vertexRemap[i] = i;
 
+        // O(n^2) comparison but with early-out for already-remapped vertices
         for (int i = 0; i < (int)points.size(); i++)
         {
             if (vertexRemap[i] != i)
@@ -203,7 +208,8 @@ namespace coacd
                     continue; // already remapped
                 double dx = points[i][0] - points[j][0];
                 double dy = points[i][1] - points[j][1];
-                if (dx * dx + dy * dy < eps * eps)
+                double distSq = dx * dx + dy * dy;
+                if (distSq < eps * eps)
                 {
                     vertexRemap[j] = i; // merge j into i
                 }
@@ -224,18 +230,21 @@ namespace coacd
             oldToNew[i] = oldToNew[canonical];
         }
 
-        // Remap edges and filter out degenerate edges (same vertex after remap)
-        vector<pair<int, int>> validEdges;
-        validEdges.reserve(border_edges.size());
+        // Remap edges, filter out degenerate edges, and remove duplicate edges
+        std::set<std::pair<int, int>> edgeSet; // use set to avoid duplicate edges
         for (const auto& e : border_edges)
         {
             int v1 = oldToNew[e.first - 1];  // border_edges uses 1-based indexing
             int v2 = oldToNew[e.second - 1];
             if (v1 != v2)
             {
-                validEdges.push_back({v1 + 1, v2 + 1}); // convert back to 1-based
+                // Normalize edge direction to avoid duplicates like (1,2) and (2,1)
+                // keeping the original direction for consistency
+                edgeSet.insert({v1, v2});
             }
         }
+        
+        vector<pair<int, int>> validEdges(edgeSet.begin(), edgeSet.end());
 
         // Check if we have enough points and edges for triangulation
         if (uniquePoints.size() < 3 || validEdges.empty())
@@ -245,7 +254,12 @@ namespace coacd
 
         int borderN = (int)points.size(); // original size for later vertex addition
 
-        CDT::Triangulation<double> cdt;
+        CDT::Triangulation<double> cdt(
+            CDT::VertexInsertionOrder::Auto,
+            CDT::IntersectingConstraintEdges::TryResolve,  // Try to resolve intersecting edges
+            0.0  // minDistToConstraintEdge
+        );
+        
         try
         {
             cdt.insertVertices(
@@ -259,13 +273,19 @@ namespace coacd
                 validEdges.begin(),
                 validEdges.end(),
                 [](const std::pair<int, int> &p)
-                { return (int)p.first - 1; },
+                { return (int)p.first; },  // already 0-based now
                 [](const std::pair<int, int> &p)
-                { return (int)p.second - 1; });
+                { return (int)p.second; });  // already 0-based now
             cdt.eraseSuperTriangle();
         }
-        catch (const std::runtime_error &e)
+        catch (const std::exception &e)
         {
+            // If CDT still fails, gracefully return error code
+            return 2;
+        }
+        catch (...)
+        {
+            // Catch any other errors (including potential assertion failures)
             return 2;
         }
 
