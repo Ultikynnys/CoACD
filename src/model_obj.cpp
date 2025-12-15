@@ -371,8 +371,11 @@ namespace coacd
             else
                 N = max(int(i % 2 == 0), int(resolution / aObj * area));
 
+            // Use per-call seeding based on the provided seed and triangle index
+            // This avoids using thread_local variables from OpenMP threads (crashes on Linux)
+            std::mt19937 local_rng(seed + static_cast<unsigned int>(i));
             std::uniform_int_distribution<int> seeder(0, 1000);
-            int seed = seeder(coacd::random_engine);
+            int local_seed = seeder(local_rng);
             float r[2];
             for (int k = 0; k < N; k++)
             {
@@ -380,14 +383,14 @@ namespace coacd
                 if (k % 3 == 0)
                 {
                     std::uniform_real_distribution<double> uniform(0.0, 1.0);
-                    //// random sample
-                    a = uniform(coacd::random_engine);
-                    b = uniform(coacd::random_engine);
+                    //// random sample using local RNG
+                    a = uniform(local_rng);
+                    b = uniform(local_rng);
                 }
                 else
                 {
                     //// quasirandom sample
-                    i4_sobol(2, &seed, r);
+                    i4_sobol(2, &local_seed, r);
                     a = r[0];
                     b = r[1];
                 }

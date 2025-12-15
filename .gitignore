@@ -11,3 +11,4 @@ build_vs/
 *.dmp
 .env
 coacd_u.egg-info/
+coacd_blender_addon
