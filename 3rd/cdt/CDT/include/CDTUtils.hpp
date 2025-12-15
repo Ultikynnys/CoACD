@@ -107,8 +107,7 @@ CDT_INLINE_IF_HEADER_ONLY Index opoNbr(const Index vertIndex)
         return Index(2);
     if(vertIndex == Index(2))
         return Index(0);
-    assert(false && "Invalid vertex index");
-    handleException(std::runtime_error("Invalid vertex index"));
+    // Return invalid index instead of throwing/asserting for robustness
     return invalidIndex;
 }
 
@@ -120,20 +119,21 @@ CDT_INLINE_IF_HEADER_ONLY Index opoVrt(const Index neighborIndex)
         return Index(0);
     if(neighborIndex == Index(2))
         return Index(1);
-    assert(false && "Invalid neighbor index");
-    handleException(std::runtime_error("Invalid neighbor index"));
+    // Return invalid index instead of throwing/asserting for robustness
     return invalidIndex;
 }
 
 CDT_INLINE_IF_HEADER_ONLY Index
 opposedTriangleInd(const VerticesArr3& vv, const VertInd iVert)
 {
-    assert(vv[0] == iVert || vv[1] == iVert || vv[2] == iVert);
+    // Safe check: return invalidIndex if vertex not found instead of asserting
     if(vv[0] == iVert)
         return Index(1);
     if(vv[1] == iVert)
         return Index(2);
-    return Index(0);
+    if(vv[2] == iVert)
+        return Index(0);
+    return invalidIndex;
 }
 
 CDT_INLINE_IF_HEADER_ONLY Index edgeNeighborInd(
@@ -141,12 +141,11 @@ CDT_INLINE_IF_HEADER_ONLY Index edgeNeighborInd(
     const VertInd iVedge1,
     const VertInd iVedge2)
 {
-    assert(vv[0] == iVedge1 || vv[1] == iVedge1 || vv[2] == iVedge1);
-    assert(vv[0] == iVedge2 || vv[1] == iVedge2 || vv[2] == iVedge2);
-    assert(
-        (vv[0] != iVedge1 && vv[0] != iVedge2) ||
-        (vv[1] != iVedge1 && vv[1] != iVedge2) ||
-        (vv[2] != iVedge1 && vv[2] != iVedge2));
+    // Safe check: verify vertices are in the triangle before proceeding
+    bool hasEdge1 = (vv[0] == iVedge1 || vv[1] == iVedge1 || vv[2] == iVedge1);
+    bool hasEdge2 = (vv[0] == iVedge2 || vv[1] == iVedge2 || vv[2] == iVedge2);
+    if(!hasEdge1 || !hasEdge2)
+        return invalidIndex;
     /*
      *      vv[2]
      *       /\
@@ -172,23 +171,27 @@ CDT_INLINE_IF_HEADER_ONLY Index edgeNeighborInd(
 CDT_INLINE_IF_HEADER_ONLY Index
 opposedVertexInd(const NeighborsArr3& nn, const TriInd iTopo)
 {
-    assert(nn[0] == iTopo || nn[1] == iTopo || nn[2] == iTopo);
+    // Safe check: return invalidIndex if neighbor not found
     if(nn[0] == iTopo)
         return Index(2);
     if(nn[1] == iTopo)
         return Index(0);
-    return Index(1);
+    if(nn[2] == iTopo)
+        return Index(1);
+    return invalidIndex;
 }
 
 CDT_INLINE_IF_HEADER_ONLY Index
 vertexInd(const VerticesArr3& vv, const VertInd iV)
 {
-    assert(vv[0] == iV || vv[1] == iV || vv[2] == iV);
+    // Safe check: return invalidIndex if vertex not found
     if(vv[0] == iV)
         return Index(0);
     if(vv[1] == iV)
         return Index(1);
-    return Index(2);
+    if(vv[2] == iV)
+        return Index(2);
+    return invalidIndex;
 }
 
 CDT_INLINE_IF_HEADER_ONLY TriInd

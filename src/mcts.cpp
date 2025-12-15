@@ -3,6 +3,9 @@
 #include "mcts.h"
 #include "process.h"
 #include "profiler.h"
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 namespace coacd
 {
@@ -659,10 +662,18 @@ namespace coacd
         // Early stopping threshold
         double early_stop_threshold = params.threshold * 0.8;
         
-        // Shuffle to get random sampling
+        // Shuffle to get random sampling - but only if not in nested parallel region
+        // Using thread_local random_engine in nested OpenMP can cause issues on Linux
         std::vector<int> indices(planes.size());
         for (int i = 0; i < (int)planes.size(); i++) indices[i] = i;
+#ifdef _OPENMP
+        if (!omp_in_parallel()) {
+            std::shuffle(indices.begin(), indices.end(), coacd::random_engine);
+        }
+        // If already in parallel, use deterministic ordering to avoid thread_local issues
+#else
         std::shuffle(indices.begin(), indices.end(), coacd::random_engine);
+#endif
         
         // Pre-filter: quick imbalance check to reduce candidate set; then order by balance closeness to 50/50
         struct Cand { int idx; double score; };
@@ -707,10 +718,15 @@ namespace coacd
             return false;
         
         // Parallel evaluation of candidate planes
+        // IMPORTANT: Only parallelize if we're NOT already in a parallel region
+        // Nested OpenMP can cause crashes on Linux
         std::vector<double> costs(filtered_indices.size(), INF);
         std::atomic<bool> found_good_plane{false};
         
 #ifdef _OPENMP
+        // Check if we're already in a parallel region - avoid nested parallelism
+        bool already_parallel = omp_in_parallel();
+        if (!already_parallel) {
 #pragma omp parallel for schedule(dynamic, 1) shared(found_good_plane, costs, filtered_indices, m, params, planes, early_stop_threshold)
 #endif
         for (int idx = 0; idx < (int)filtered_indices.size(); idx++)
@@ -753,6 +769,9 @@ namespace coacd
             if (H < early_stop_threshold)
                 found_good_plane.store(true, std::memory_order_relaxed);
         }
+#ifdef _OPENMP
+        } // end if (!already_parallel)
+#endif
         
         // Find best plane from parallel results
         int best_idx = -1;
