@@ -14,14 +14,16 @@ subject to the following restrictions:
 */
 
 #include "btAlignedAllocator.h"
+#include <atomic>
 
 #ifdef _MSC_VER
 #pragma warning(disable:4311 4302)
 #endif
 
-int32_t gNumAlignedAllocs = 0;
-int32_t gNumAlignedFree = 0;
-int32_t gTotalBytesAlignedAllocs = 0; //detect memory leaks
+// Use atomic variables to prevent data races in OpenMP parallel regions
+std::atomic<int32_t> gNumAlignedAllocs{0};
+std::atomic<int32_t> gNumAlignedFree{0};
+std::atomic<int32_t> gTotalBytesAlignedAllocs{0}; //detect memory leaks
 
 static void* btAllocDefault(size_t size)
 {
@@ -128,7 +130,7 @@ void* btAlignedAllocInternal(size_t size, int32_t alignment, int32_t line, char*
         ret = (void*)(real); //??
     }
 
-    printf("allocation#%d at address %x, from %s,line %d, size %d\n", gNumAlignedAllocs, real, filename, line, size);
+    printf("allocation#%d at address %x, from %s,line %d, size %d\n", gNumAlignedAllocs.load(), real, filename, line, size);
 
     int32_t* ptr = (int32_t*)ret;
     *ptr = 12;
@@ -146,7 +148,7 @@ void btAlignedFreeInternal(void* ptr, int32_t line, char* filename)
         int32_t size = *((int32_t*)(ptr)-2);
         gTotalBytesAlignedAllocs -= size;
 
-        printf("free #%d at address %x, from %s,line %d, size %d\n", gNumAlignedFree, real, filename, line, size);
+        printf("free #%d at address %x, from %s,line %d, size %d\n", gNumAlignedFree.load(), real, filename, line, size);
 
         sFreeFunc(real);
     }
