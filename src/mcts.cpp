@@ -365,7 +365,7 @@ namespace coacd
         double best_within_three = INF;
         Plane best_plane_within_three;
         double Hmin;
-        bool flag;
+        (void)0; // intentionally empty, flag variable removed
 
         if (fabs(bestplane.a - 1.0) < 1e-4 || !mode)
         {
@@ -553,7 +553,7 @@ namespace coacd
         double *bbox = m.GetBBox();
         double downsample;
         double interval = 0.01;
-        bool flag;
+        (void)0; // intentionally empty, flag variable removed
         if (fabs(bestplane.a - 1.0) < 1e-4)
         {
             double left, right;

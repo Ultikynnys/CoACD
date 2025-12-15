@@ -223,9 +223,12 @@ namespace coacd
         mx = { -INF, -INF, -INF };
         for (const auto &p : m.points)
         {
-            if (p[0] < mn[0]) mn[0] = p[0]; if (p[0] > mx[0]) mx[0] = p[0];
-            if (p[1] < mn[1]) mn[1] = p[1]; if (p[1] > mx[1]) mx[1] = p[1];
-            if (p[2] < mn[2]) mn[2] = p[2]; if (p[2] > mx[2]) mx[2] = p[2];
+            if (p[0] < mn[0]) mn[0] = p[0];
+            if (p[0] > mx[0]) mx[0] = p[0];
+            if (p[1] < mn[1]) mn[1] = p[1];
+            if (p[1] > mx[1]) mx[1] = p[1];
+            if (p[2] < mn[2]) mn[2] = p[2];
+            if (p[2] > mx[2]) mx[2] = p[2];
         }
     }
 
@@ -278,7 +281,7 @@ namespace coacd
                 double aabbDist = AABBMinDistance(aabbMin[p1], aabbMax[p1], aabbMin[p2], aabbMax[p2]);
                 if (aabbDist < threshold)
                 {
-                    double dist = MeshDist(cvxs[p1], cvxs[p2]);
+                    (void)MeshDist(cvxs[p1], cvxs[p2]);  // Result currently unused but call may have side effects
                     Model combinedCH;
                     MergeCH(cvxs[p1], cvxs[p2], combinedCH, params);
 
@@ -373,7 +376,7 @@ namespace coacd
                     double aabbDist = AABBMinDistance(aabbMin[p2], aabbMax[p2], aabbMin[i], aabbMax[i]);
                     if (aabbDist < threshold)
                     {
-                        double dist = MeshDist(cvxs[p2], cvxs[i]);
+                        (void)MeshDist(cvxs[p2], cvxs[i]);  // Result currently unused but call may have side effects
                         Model combinedCH;
                         MergeCH(cvxs[p2], cvxs[i], combinedCH, params);
                         costMatrix[rowIdx] = ComputeHCost(cvxs[p2], cvxs[i], combinedCH, params.rv_k, coarseRes, params.seed);
@@ -389,7 +392,7 @@ namespace coacd
                     double aabbDist = AABBMinDistance(aabbMin[p2], aabbMax[p2], aabbMin[i], aabbMax[i]);
                     if (aabbDist < threshold)
                     {
-                        double dist = MeshDist(cvxs[p2], cvxs[i]);
+                        (void)MeshDist(cvxs[p2], cvxs[i]);  // Result currently unused but call may have side effects
                         Model combinedCH;
                         MergeCH(cvxs[p2], cvxs[i], combinedCH, params);
                         costMatrix[rowIdx] = ComputeHCost(cvxs[p2], cvxs[i], combinedCH, params.rv_k, coarseRes, params.seed);

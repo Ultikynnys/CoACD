@@ -1061,10 +1061,11 @@ namespace coacd
                 f1 = -1 * neg.triangles[i][1] + neg_N - 1;
             if (neg.triangles[i][2] >= 0)
                 f2 = neg_proj[neg.triangles[i][2]] - 1;
-            else
+            else {
                 f2 = -1 * neg.triangles[i][2] + neg_N - 1;
+            }
 
-                neg.triangles[i] = {f0, f1, f2};
+            neg.triangles[i] = {f0, f1, f2};
                 }
             }
 
