@@ -62,6 +62,30 @@ jobs:
             python -m zipfile -l "$wheel" | grep -E '\.(so|pyd|dll|dylib)' || echo "Warning: No binaries found in $wheel"
           done
 
+      - name: Test Wheel Functionality
+        shell: bash
+        run: |
+          echo "Testing wheel functionality with example mesh..."
+          # Install the built wheel (use the first matching wheel for this platform)
+          WHEEL=$(ls wheelhouse/*.whl | head -1)
+          echo "Installing wheel: $WHEEL"
+          pip install "$WHEEL" numpy trimesh
+          
+          # Run a quick CoACD test
+          python -c "
+          import trimesh
+          import coacd_u as coacd
+          
+          print('Testing CoACD on Bottle.obj...')
+          coacd.set_log_level('info')
+          mesh = trimesh.load('examples/Bottle.obj', force='mesh')
+          coacd_mesh = coacd.Mesh(mesh.vertices, mesh.faces)
+          result = coacd.run_coacd(coacd_mesh, threshold=0.05)
+          print(f'SUCCESS: Generated {len(result)} convex hulls')
+          assert len(result) > 0, 'Expected at least one convex hull'
+          print('Test passed!')
+          "
+
       - name: Upload Wheels
         uses: actions/upload-artifact@v4
         with:
