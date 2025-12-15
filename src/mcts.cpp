@@ -192,36 +192,24 @@ namespace coacd
     Node::Node(Params _params)
     {
         params = _params;
-        parent = NULL;
+        parent = nullptr;
         visit_times = 0;
         quality_value = INF;
         // quality_value = 0;
-        state = NULL;
+        state = nullptr;
     }
-    Node::~Node()
-    {
-        if (state != NULL)
-            delete state;
-    }
-    Node Node::operator=(const Node &_node)
-    {
-        params = _node.params;
-        children = _node.children;
-        visit_times = _node.visit_times;
-        quality_value = _node.quality_value;
-        state = _node.state;
-        parent = _node.parent;
+    // Destructor is default in header
+    
+    // operator= is deleted in header
 
-        return (*this);
-    }
-    void Node::set_state(State _state)
+    void Node::set_state(const State& _state)
     {
-        state = new State(params);
+        state = std::make_unique<State>(params);
         *state = _state;
     }
     State *Node::get_state()
     {
-        return state;
+        return state.get();
     }
     void Node::set_parent(Node *_parent)
     {
@@ -233,7 +221,12 @@ namespace coacd
     }
     vector<Node *> Node::get_children()
     {
-        return children;
+        vector<Node *> raw_children;
+        raw_children.reserve(children.size());
+        for (const auto& child : children) {
+            raw_children.push_back(child.get());
+        }
+        return raw_children;
     }
     double Node::get_visit_times()
     {
@@ -265,10 +258,10 @@ namespace coacd
         int current_max_expand_nodes = (int)_state->current_parts[_state->worst_part_idx].available_moves.size();
         return (int)children.size() == current_max_expand_nodes;
     }
-    void Node::add_child(Node *sub_node)
+    void Node::add_child(std::unique_ptr<Node> sub_node)
     {
         sub_node->set_parent(this);
-        children.push_back(sub_node);
+        children.push_back(std::move(sub_node));
     }
 
     bool clip_by_path(Model &m, double &final_cost, Params &params, Plane &first_plane, vector<Plane> &best_path)
@@ -366,179 +359,76 @@ namespace coacd
         Plane best_plane_within_three;
         double Hmin;
 
-
-        if (fabs(bestplane.a - 1.0) < 1e-4 || !mode)
+        for (int dim = 0; dim < 3; ++dim)
         {
-            double left, right;
-            interval = max(0.01, abs(bbox[0] - bbox[1]) / ((double)params.mcts_nodes + 1));
-            if (mode == true)
+            double plane_n = (dim == 0) ? bestplane.a : ((dim == 1) ? bestplane.b : bestplane.c);
+            if (fabs(plane_n - 1.0) < 1e-4 || !mode)
             {
-                left = max(bbox[0] + minItv, -1.0 * bestplane.d - interval);
-                right = min(bbox[1] - minItv, -1.0 * bestplane.d + interval);
-            }
-            else
-            {
-                left = bbox[0] + minItv;
-                right = bbox[1] - minItv;
-            }
-            if (mode && left > right)
-                return false;
-            size_t iter = 0;
-            double res = 0;
-            while (left + epsilon < right && iter++ < thres)
-            {
-                Model pos1, neg1, posCH1, negCH1, pos2, neg2, posCH2, negCH2;
-                double margin = (right - left) / 3.0;
-                double m1 = left + margin;
-                double m2 = m1 + margin;
-                Plane p1 = Plane(1.0, 0.0, 0.0, -m1), p2 = Plane(1.0, 0.0, 0.0, -m2);
-
-                double E1;
-                clip_by_path(m, E1, params, p1, best_path);
-
-                double E2;
-                clip_by_path(m, E2, params, p2, best_path);
-
-                if (E1 < E2)
+                double left, right;
+                double min_val = bbox[dim * 2];
+                double max_val = bbox[dim * 2 + 1];
+                
+                interval = max(0.01, abs(min_val - max_val) / ((double)params.mcts_nodes + 1));
+                if (mode == true)
                 {
-                    right = m2;
-                    res = m1;
+                    left = max(min_val + minItv, -1.0 * bestplane.d - interval);
+                    right = min(max_val - minItv, -1.0 * bestplane.d + interval);
                 }
                 else
                 {
-                    left = m1;
-                    res = m2;
+                    left = min_val + minItv;
+                    right = max_val - minItv;
                 }
-            }
-            Plane tp;
-            tp = Plane(1.0, 0.0, 0.0, -res);
-            clip_by_path(m, Hmin, params, tp, best_path);
-
-            if (Hmin < best_cost)
-                bestplane = tp;
-            if (!mode)
-            {
-                if (Hmin < best_within_three)
+                if (mode && left > right)
+                    return false;
+                    
+                size_t iter = 0;
+                double res = 0;
+                while (left + epsilon < right && iter++ < thres)
                 {
-                    best_within_three = Hmin;
-                    best_plane_within_three = bestplane;
+                    Model pos1, neg1, posCH1, negCH1, pos2, neg2, posCH2, negCH2;
+                    double margin = (right - left) / 3.0;
+                    double m1 = left + margin;
+                    double m2 = m1 + margin;
+                    Plane p1 = (dim == 0) ? Plane(1.0, 0.0, 0.0, -m1) : ((dim == 1) ? Plane(0.0, 1.0, 0.0, -m1) : Plane(0.0, 0.0, 1.0, -m1));
+                    Plane p2 = (dim == 0) ? Plane(1.0, 0.0, 0.0, -m2) : ((dim == 1) ? Plane(0.0, 1.0, 0.0, -m2) : Plane(0.0, 0.0, 1.0, -m2));
+
+                    double E1;
+                    clip_by_path(m, E1, params, p1, best_path);
+
+                    double E2;
+                    clip_by_path(m, E2, params, p2, best_path);
+
+                    if (E1 < E2)
+                    {
+                        right = m2;
+                        res = m1;
+                    }
+                    else
+                    {
+                        left = m1;
+                        res = m2;
+                    }
+                }
+                Plane tp = (dim == 0) ? Plane(1.0, 0.0, 0.0, -res) : ((dim == 1) ? Plane(0.0, 1.0, 0.0, -res) : Plane(0.0, 0.0, 1.0, -res));
+                clip_by_path(m, Hmin, params, tp, best_path);
+
+                if (Hmin < best_cost)
+                {
+                    bestplane = tp;
+                    best_cost = Hmin; // Also update best_cost essentially
+                }
+                if (!mode)
+                {
+                    if (Hmin < best_within_three)
+                    {
+                        best_within_three = Hmin;
+                        best_plane_within_three = bestplane;
+                    }
                 }
             }
         }
-        if (fabs(bestplane.b - 1.0) < 1e-4 || !mode)
-        {
-            double left, right;
-            interval = max(0.01, abs(bbox[2] - bbox[3]) / ((double)params.mcts_nodes + 1));
-            if (mode == true)
-            {
-                left = max(bbox[2] + minItv, -1.0 * bestplane.d - interval);
-                right = min(bbox[3] - minItv, -1.0 * bestplane.d + interval);
-            }
-            else
-            {
-                left = bbox[2] + minItv;
-                right = bbox[3] - minItv;
-            }
-            if (mode && left > right)
-                return false;
-            size_t iter = 0;
-            double res = 0;
-            while (left + epsilon < right && iter++ < thres)
-            {
-                Model pos1, neg1, posCH1, negCH1, pos2, neg2, posCH2, negCH2;
-                double margin = (right - left) / 3.0;
-                double m1 = left + margin;
-                double m2 = m1 + margin;
-                Plane p1 = Plane(0.0, 1.0, 0.0, -m1), p2 = Plane(0.0, 1.0, 0.0, -m2);
-
-                double E1;
-                clip_by_path(m, E1, params, p1, best_path);
-
-                double E2;
-                clip_by_path(m, E2, params, p2, best_path);
-                if (E1 < E2)
-                {
-                    right = m2;
-                    res = m1;
-                }
-                else
-                {
-                    left = m1;
-                    res = m2;
-                }
-            }
-            Plane tp;
-            tp = Plane(0.0, 1.0, 0.0, -res);
-            clip_by_path(m, Hmin, params, tp, best_path);
-
-            if (Hmin < best_cost)
-                bestplane = tp;
-            if (!mode)
-            {
-                if (Hmin < best_within_three)
-                {
-                    best_within_three = Hmin;
-                    best_plane_within_three = bestplane;
-                }
-            }
-        }
-        if (fabs(bestplane.c - 1.0) < 1e-4 || !mode)
-        {
-            double left, right;
-            interval = max(0.01, abs(bbox[4] - bbox[5]) / ((double)params.mcts_nodes + 1));
-            if (mode == true)
-            {
-                left = max(bbox[4] + minItv, -1.0 * bestplane.d - interval);
-                right = min(bbox[5] - minItv, -1.0 * bestplane.d + interval);
-            }
-            else
-            {
-                left = bbox[4] + minItv;
-                right = bbox[5] - minItv;
-            }
-            if (mode && left > right)
-                return false;
-            size_t iter = 0;
-            double res = 0;
-            while (left + epsilon < right && iter++ < thres)
-            {
-                Model pos1, neg1, posCH1, negCH1, pos2, neg2, posCH2, negCH2;
-                double margin = (right - left) / 3.0;
-                double m1 = left + margin;
-                double m2 = m1 + margin;
-                Plane p1 = Plane(0.0, 0.0, 1.0, -m1), p2 = Plane(0.0, 0.0, 1.0, -m2);
-
-                double E1;
-                clip_by_path(m, E1, params, p1, best_path);
-
-                double E2;
-                clip_by_path(m, E2, params, p2, best_path);
-                if (E1 < E2)
-                {
-                    right = m2;
-                    res = m1;
-                }
-                else
-                {
-                    left = m1;
-                    res = m2;
-                }
-            }
-            Plane tp;
-            tp = Plane(0.0, 0.0, 1.0, -res);
-            clip_by_path(m, Hmin, params, tp, best_path);
-
-            if (Hmin < best_cost)
-                bestplane = tp;
-            if (!mode)
-            {
-                if (Hmin < best_within_three)
-                {
-                    best_within_three = Hmin;
-                    best_plane_within_three = bestplane;
-                }
-            }
-        }
+        
         if (!mode)
         {
             if (best_within_three > INF - 1)
@@ -554,68 +444,35 @@ namespace coacd
         double downsample;
         double interval = 0.01;
 
-        if (fabs(bestplane.a - 1.0) < 1e-4)
+        for (int dim = 0; dim < 3; ++dim)
         {
-            double left, right;
-            downsample = max(0.01, abs(bbox[0] - bbox[1]) / ((double)params.mcts_nodes + 1));
-            left = max(bbox[0] + interval, -1.0 * bestplane.d - downsample);
-            right = min(bbox[1] - interval, -1.0 * bestplane.d + downsample);
-
-            double min_cost = INF;
-            for (double i = left; i <= right; i += interval)
+            double plane_n = (dim == 0) ? bestplane.a : ((dim == 1) ? bestplane.b : bestplane.c);
+            if (fabs(plane_n - 1.0) < 1e-4)
             {
-                double E;
-                Plane pl = Plane(1.0, 0.0, 0.0, -i);
-                clip_by_path(m, E, params, pl, best_path);
-                if (E < best_cost && E < min_cost)
+                double left, right;
+                double min_val = bbox[dim * 2];
+                double max_val = bbox[dim * 2 + 1];
+                
+                downsample = max(0.01, abs(min_val - max_val) / ((double)params.mcts_nodes + 1));
+                left = max(min_val + interval, -1.0 * bestplane.d - downsample);
+                right = min(max_val - interval, -1.0 * bestplane.d + downsample);
+
+                double min_cost = INF;
+                for (double i = left; i <= right; i += interval)
                 {
-                    min_cost = E;
-                    bestplane = pl;
+                    double E;
+                    Plane pl = (dim == 0) ? Plane(1.0, 0.0, 0.0, -i) : ((dim == 1) ? Plane(0.0, 1.0, 0.0, -i) : Plane(0.0, 0.0, 1.0, -i));
+                    clip_by_path(m, E, params, pl, best_path);
+                    if (E < best_cost && E < min_cost)
+                    {
+                        min_cost = E;
+                        bestplane = pl;
+                    }
                 }
+                return; // Refine only matches one axis
             }
         }
-        else if (fabs(bestplane.b - 1.0) < 1e-4)
-        {
-            double left, right;
-            downsample = max(0.01, abs(bbox[2] - bbox[3]) / ((double)params.mcts_nodes + 1));
-            left = max(bbox[2] + interval, -1.0 * bestplane.d - downsample);
-            right = min(bbox[3] - interval, -1.0 * bestplane.d + downsample);
-
-            double min_cost = INF;
-            for (double i = left; i <= right; i += interval)
-            {
-                double E;
-                Plane pl = Plane(0.0, 1.0, 0.0, -i);
-                clip_by_path(m, E, params, pl, best_path);
-                if (E < best_cost && E < min_cost)
-                {
-                    min_cost = E;
-                    bestplane = pl;
-                }
-            }
-        }
-        else if (fabs(bestplane.c - 1.0) < 1e-4)
-        {
-            double left, right;
-            downsample = max(0.01, abs(bbox[4] - bbox[5]) / ((double)params.mcts_nodes + 1));
-            left = max(bbox[4] + interval, -1.0 * bestplane.d - downsample);
-            right = min(bbox[5] - interval, -1.0 * bestplane.d + downsample);
-
-            double min_cost = INF;
-            for (double i = left; i <= right; i += interval)
-            {
-                double E;
-                Plane pl = Plane(0.0, 0.0, 1.0, -i);
-                clip_by_path(m, E, params, pl, best_path);
-                if (E < best_cost && E < min_cost)
-                {
-                    min_cost = E;
-                    bestplane = pl;
-                }
-            }
-        }
-        else
-            throw runtime_error("RefineMCTS Error!");
+        throw runtime_error("RefineMCTS Error!");
     }
 
     void ComputeAxesAlignedClippingPlanes(Model &m, const int mcts_nodes, vector<Plane> &planes, bool shuffle)
@@ -623,20 +480,19 @@ namespace coacd
         double *bbox = m.GetBBox();
         double interval;
         double eps = 1e-6;
-        interval = max(0.01, abs(bbox[0] - bbox[1]) / ((double)mcts_nodes + 1));
-        for (double i = bbox[0] + max(0.015, interval); i <= bbox[1] - max(0.015, interval) + eps; i += interval)
+        
+        for (int dim = 0; dim < 3; ++dim)
         {
-            planes.push_back(Plane(1.0, 0.0, 0.0, -i));
-        }
-        interval = max(0.01, abs(bbox[2] - bbox[3]) / ((double)mcts_nodes + 1));
-        for (double i = bbox[2] + max(0.015, interval); i <= bbox[3] - max(0.015, interval) + eps; i += interval)
-        {
-            planes.push_back(Plane(0.0, 1.0, 0.0, -i));
-        }
-        interval = max(0.01, abs(bbox[4] - bbox[5]) / ((double)mcts_nodes + 1));
-        for (double i = bbox[4] + max(0.015, interval); i <= bbox[5] - max(0.015, interval) + eps; i += interval)
-        {
-            planes.push_back(Plane(0.0, 0.0, 1.0, -i));
+            double min_val = bbox[dim * 2];
+            double max_val = bbox[dim * 2 + 1];
+            interval = max(0.01, abs(min_val - max_val) / ((double)mcts_nodes + 1));
+            
+            for (double i = min_val + max(0.015, interval); i <= max_val - max(0.015, interval) + eps; i += interval)
+            {
+                if (dim == 0) planes.push_back(Plane(1.0, 0.0, 0.0, -i));
+                else if (dim == 1) planes.push_back(Plane(0.0, 1.0, 0.0, -i));
+                else planes.push_back(Plane(0.0, 0.0, 1.0, -i));
+            }
         }
 
         if (shuffle)
@@ -909,18 +765,19 @@ namespace coacd
         profiler::ScopedTimer timer("MCTS_expand");
         State new_state = node->get_state()->get_next_state_with_random_choice();
 
-        Node *sub_node = new Node(node->params);
+        auto sub_node = std::make_unique<Node>(node->params);
         sub_node->set_state(new_state);
-        node->add_child(sub_node);
+        Node* ptr = sub_node.get();
+        node->add_child(std::move(sub_node));
 
-        return sub_node;
+        return ptr;
     }
 
     Node *best_child(Node *node, bool is_exploration, double initial_cost)
     {
         profiler::ScopedTimer timer("MCTS_best_child");
         double best_score = INF;
-        Node *best_sub_node = NULL;
+        Node *best_sub_node = nullptr;
 
         vector<Node *> children = node->get_children();
         for (int i = 0; i < (int)children.size(); i++)
@@ -954,7 +811,7 @@ namespace coacd
         for (int i = 0; i < N; i++)
             tmp_path.push_back(current_path[N - 1 - i]);
 
-        while (node != NULL)
+        while (node != nullptr)
         {
             if (node->get_state()->current_round == 0 && node->quality_value > reward)
                 best_path = tmp_path;
@@ -968,22 +825,8 @@ namespace coacd
         tmp_path.clear();
     }
 
-    void free_tree(Node *root, int idx)
-    {
-        if (root->get_children().size() == 0)
-        {
-            delete root;
-            return;
-        }
+    // free_tree removed as smart pointers handle cleanup
 
-        vector<Node *> children = root->get_children();
-        while (idx < (int)children.size())
-        {
-            free_tree(children[idx++], 0);
-        }
-        delete root;
-        return;
-    }
 
     Node *MonteCarloTreeSearch(Params &params, Node *node, vector<Plane> &best_path)
     {

@@ -47,12 +47,13 @@ namespace coacd
 
     void PrintEdgeSet(vector<pair<int, int>> edges)
     {
-        ofstream of("../edge.txt");
-        for (int i = 0; i < (int)edges.size(); i++)
-        {
-            of << i + 1 << ' ' << edges[i].first << ' ' << edges[i].second << endl;
-        }
-        of.close();
+        // Debug code disabled
+        // ofstream of("../edge.txt");
+        // for (int i = 0; i < (int)edges.size(); i++)
+        // {
+        //     of << i + 1 << ' ' << edges[i].first << ' ' << edges[i].second << endl;
+        // }
+        // of.close();
     }
 
     bool CreatePlaneRotationMatrix(vector<vec3d> &border, vector<pair<int, int>> border_edges, vec3d &T, double R[3][3], Plane &plane)

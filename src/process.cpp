@@ -585,22 +585,22 @@ namespace coacd
                     vector<Plane> planes, best_path;
 
                     // MCTS for cutting plane
-                    Node *node = new Node(params);
+                    auto node = std::make_unique<Node>(params);
                     State state(params, pmesh);
                     node->set_state(state);
                     Node *best_next_node;
                     {
                         profiler::ScopedTimer timer("MonteCarloTreeSearch");
-                        best_next_node = MonteCarloTreeSearch(params, node, best_path);
+                        best_next_node = MonteCarloTreeSearch(params, node.get(), best_path);
                     }
-                    if (best_next_node == NULL)
+                    if (best_next_node == nullptr)
                     {
 #ifdef _OPENMP
                         omp_set_lock(&writelock);
 #endif
                         parts.push_back(pCH);
                         pmeshs.push_back(pmesh);
-                        free_tree(node, 0);
+
 #ifdef _OPENMP
                         omp_unset_lock(&writelock);
 #endif
@@ -612,7 +612,7 @@ namespace coacd
                             profiler::ScopedTimer timer("TernaryMCTS");
                             TernaryMCTS(pmesh, params, bestplane, best_path, best_next_node->quality_value);
                         }
-                        free_tree(node, 0);
+
 
                         Model pos, neg;
                         bool clipf;

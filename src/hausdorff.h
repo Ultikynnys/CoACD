@@ -1,25 +1,26 @@
 #pragma once
 #include <typeinfo>
 #include <algorithm>
-#include <math.h>
-#include <time.h>
+#include <cmath>
+#include <ctime>
 #include <thread>
-#include <assert.h>
+#include <cassert>
 
 #include <map>
 #include <iomanip>
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 #include <map>
 #include <unordered_map>
+#include <limits>
 
 #include "nanoflann.hpp"
 #include "shape.h"
 
 // utilizing nanoflann namespace is usually acceptable in internal headers compared to std
-using namespace nanoflann;
+// using namespace nanoflann; // Removed to prevent namespace pollution
 
 #define INF std::numeric_limits<double>::max()
 
@@ -157,15 +158,15 @@ namespace coacd
         vec2PointCloud(cloudA, XA);
         vec2PointCloud(cloudB, XB);
 
-        typedef KDTreeSingleIndexAdaptor<
-            L2_Simple_Adaptor<double, PointCloud<double>>,
+        typedef nanoflann::KDTreeSingleIndexAdaptor<
+            nanoflann::L2_Simple_Adaptor<double, PointCloud<double>>,
             PointCloud<double>,
             3 /* dim */
             >
             my_kd_tree_t;
 
-        my_kd_tree_t indexA(3 /*dim*/, cloudA, KDTreeSingleIndexAdaptorParams(10 /* max leaf */));
-        my_kd_tree_t indexB(3 /*dim*/, cloudB, KDTreeSingleIndexAdaptorParams(10 /* max leaf */));
+        my_kd_tree_t indexA(3 /*dim*/, cloudA, nanoflann::KDTreeSingleIndexAdaptorParams(10 /* max leaf */));
+        my_kd_tree_t indexB(3 /*dim*/, cloudB, nanoflann::KDTreeSingleIndexAdaptorParams(10 /* max leaf */));
         indexA.buildIndex();
         indexB.buildIndex();
 

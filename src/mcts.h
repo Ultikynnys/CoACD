@@ -79,28 +79,31 @@ namespace coacd
     State get_next_state_with_random_choice();
   };
 
+#include <memory>
+
   class Node
   {
   public:
     int idx;
-    vector<Node *> children;
+    vector<std::unique_ptr<Node>> children;
 
     int visit_times;
     double quality_value;
 
-    State *state;
+    std::unique_ptr<State> state;
 
     Params params;
     Node *parent;
 
     Node(Params _params);
-    ~Node();
-    Node operator=(const Node &_node);
-    void set_state(State _state);
+    ~Node() = default;
+    Node operator=(const Node &_node) = delete; // distinct unique_ptr cannot be copied
+    void set_state(const State& _state);
     State *get_state();
     void set_parent(Node *_parent);
     Node *get_parent();
-    vector<Node *> get_children();
+    // Returns raw pointers for observation
+    vector<Node *> get_children(); 
     double get_visit_times();
     void set_visit_times(double _visit_times);
     void visit_times_add_one();
@@ -108,7 +111,7 @@ namespace coacd
     double get_quality_value();
     void quality_value_add_n(double n);
     bool is_all_expand();
-    void add_child(Node *sub_node);
+    void add_child(std::unique_ptr<Node> sub_node);
   };
 
   Node *tree_policy(Node *node, double initial_cost, bool &flag);
@@ -124,5 +127,4 @@ namespace coacd
   void ComputeAxesAlignedClippingPlanes(Model &m, const int mcts_nodes, vector<Plane> &planes, bool shuffle);
   bool ComputeBestRvClippingPlane(Model &m, Params &params, vector<Plane> &planes, Plane &bestplane, double &bestcost);
   double ComputeReward(Params &params, double meshCH_v, vector<double> &current_costs, vector<Part> &current_parts, int &worst_part_idx, double ori_mesh_area, double ori_mesh_volume);
-  void free_tree(Node *root, int idx);
 }

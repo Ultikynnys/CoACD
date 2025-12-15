@@ -104,14 +104,14 @@ namespace coacd
     PointCloud<double> cloudB;
     vec2PointCloud(cloudB, XB);
 
-    typedef KDTreeSingleIndexAdaptor<
-        L2_Simple_Adaptor<double, PointCloud<double>>,
+    typedef nanoflann::KDTreeSingleIndexAdaptor<
+        nanoflann::L2_Simple_Adaptor<double, PointCloud<double>>,
         PointCloud<double>,
         3 /* dim */
         >
         my_kd_tree_t;
 
-    my_kd_tree_t indexB(3 /*dim*/, cloudB, KDTreeSingleIndexAdaptorParams(10 /* max leaf */));
+    my_kd_tree_t indexB(3 /*dim*/, cloudB, nanoflann::KDTreeSingleIndexAdaptorParams(10 /* max leaf */));
     indexB.buildIndex();
 
     double minDist = INF;
