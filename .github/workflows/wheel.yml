@@ -82,15 +82,10 @@ jobs:
           cat > test_coacd.py << 'EOF'
           import sys
           import faulthandler
-          import signal
           import traceback
           
           # Enable faulthandler to get Python stack trace on segfault
           faulthandler.enable()
-          
-          # Also dump stack trace on SIGSEGV if possible
-          if hasattr(signal, 'SIGSEGV'):
-              faulthandler.register(signal.SIGSEGV)
           
           print("=" * 60, flush=True)
           print("STEP 1: Importing modules...", flush=True)
