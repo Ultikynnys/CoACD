@@ -589,17 +589,23 @@ namespace coacd
 
                 if (h > params.threshold)
                 {
+                    logger::info("  [DEBUG] Part {} - Entering MCTS block (h={} > threshold={})", p, h, params.threshold);
                     vector<Plane> planes, best_path;
 
                     // MCTS for cutting plane
+                    logger::info("  [DEBUG] Part {} - Creating Node", p);
                     auto node = std::make_unique<Node>(params);
+                    logger::info("  [DEBUG] Part {} - Creating State", p);
                     State state(params, pmesh);
+                    logger::info("  [DEBUG] Part {} - Setting state on node", p);
                     node->set_state(state);
+                    logger::info("  [DEBUG] Part {} - Starting MonteCarloTreeSearch", p);
                     Node *best_next_node;
                     {
                         profiler::ScopedTimer timer("MonteCarloTreeSearch");
                         best_next_node = MonteCarloTreeSearch(params, node.get(), best_path);
                     }
+                    logger::info("  [DEBUG] Part {} - MonteCarloTreeSearch done (best_next_node={})", p, (best_next_node ? "valid" : "null"));
                     if (best_next_node == nullptr)
                     {
 #ifdef _OPENMP
