@@ -53,13 +53,14 @@ class CMakeBuild(build_ext):
         system = platform.system().lower()
         # Set Python_EXECUTABLE instead if you use PYBIND11_FINDPYTHON
         cmake_args = [
+            "-Wno-dev",
             "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={}".format(extdir),
             "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=$<1:{}>".format(extdir),
             # "-DPYTHON_EXECUTABLE={}".format(sys.executable),
             "-DCMAKE_BUILD_TYPE={}".format(cfg),  # not used on MSVC, but no harm
             "-DOPENVDB_CORE_SHARED=OFF",
             "-DTBB_TEST=OFF",
-            "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",  # Compatibility with CMake 4.2+
+
         ]
         
         # Platform-specific flags
@@ -125,7 +126,7 @@ setup(
     ],
     license="MIT",
     url="https://colin97.github.io/CoACD/",
-    packages=["coacd_u"],
+    packages=["coacd_u", "coacd_u.bin"],
     python_requires=">=3.9",
     install_requires=["numpy"],
     ext_modules=[CMakeExtension("coacd_u")],
