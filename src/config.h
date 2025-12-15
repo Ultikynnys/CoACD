@@ -21,21 +21,21 @@ namespace coacd
   {
   public:
     /////////////// Basic Config ///////////////
-    string input_model;
-    string output_name;
-    string remesh_output_name;
+    std::string input_model;
+    std::string output_name;
+    std::string remesh_output_name;
     int mcts_nodes;
     double threshold;
     unsigned int resolution;
     unsigned int seed;
     double rv_k;
-    string preprocess_mode;
+    std::string preprocess_mode;
     int prep_resolution;
     bool pca;
     bool merge;
     int max_convex_hull;
     double dmc_thres;
-    string apx_mode;
+    std::string apx_mode;
     bool decimate;
     int max_ch_vertex;
     bool extrude;
