@@ -365,7 +365,7 @@ namespace coacd
         double best_within_three = INF;
         Plane best_plane_within_three;
         double Hmin;
-        (void)0; // intentionally empty, flag variable removed
+
 
         if (fabs(bestplane.a - 1.0) < 1e-4 || !mode)
         {
@@ -394,10 +394,10 @@ namespace coacd
                 Plane p1 = Plane(1.0, 0.0, 0.0, -m1), p2 = Plane(1.0, 0.0, 0.0, -m2);
 
                 double E1;
-                flag = clip_by_path(m, E1, params, p1, best_path);
+                clip_by_path(m, E1, params, p1, best_path);
 
                 double E2;
-                flag = clip_by_path(m, E2, params, p2, best_path);
+                clip_by_path(m, E2, params, p2, best_path);
 
                 if (E1 < E2)
                 {
@@ -412,7 +412,7 @@ namespace coacd
             }
             Plane tp;
             tp = Plane(1.0, 0.0, 0.0, -res);
-            flag = clip_by_path(m, Hmin, params, tp, best_path);
+            clip_by_path(m, Hmin, params, tp, best_path);
 
             if (Hmin < best_cost)
                 bestplane = tp;
@@ -452,10 +452,10 @@ namespace coacd
                 Plane p1 = Plane(0.0, 1.0, 0.0, -m1), p2 = Plane(0.0, 1.0, 0.0, -m2);
 
                 double E1;
-                flag = clip_by_path(m, E1, params, p1, best_path);
+                clip_by_path(m, E1, params, p1, best_path);
 
                 double E2;
-                flag = clip_by_path(m, E2, params, p2, best_path);
+                clip_by_path(m, E2, params, p2, best_path);
                 if (E1 < E2)
                 {
                     right = m2;
@@ -469,7 +469,7 @@ namespace coacd
             }
             Plane tp;
             tp = Plane(0.0, 1.0, 0.0, -res);
-            flag = clip_by_path(m, Hmin, params, tp, best_path);
+            clip_by_path(m, Hmin, params, tp, best_path);
 
             if (Hmin < best_cost)
                 bestplane = tp;
@@ -509,10 +509,10 @@ namespace coacd
                 Plane p1 = Plane(0.0, 0.0, 1.0, -m1), p2 = Plane(0.0, 0.0, 1.0, -m2);
 
                 double E1;
-                flag = clip_by_path(m, E1, params, p1, best_path);
+                clip_by_path(m, E1, params, p1, best_path);
 
                 double E2;
-                flag = clip_by_path(m, E2, params, p2, best_path);
+                clip_by_path(m, E2, params, p2, best_path);
                 if (E1 < E2)
                 {
                     right = m2;
@@ -526,7 +526,7 @@ namespace coacd
             }
             Plane tp;
             tp = Plane(0.0, 0.0, 1.0, -res);
-            flag = clip_by_path(m, Hmin, params, tp, best_path);
+            clip_by_path(m, Hmin, params, tp, best_path);
 
             if (Hmin < best_cost)
                 bestplane = tp;
@@ -553,7 +553,7 @@ namespace coacd
         double *bbox = m.GetBBox();
         double downsample;
         double interval = 0.01;
-        (void)0; // intentionally empty, flag variable removed
+
         if (fabs(bestplane.a - 1.0) < 1e-4)
         {
             double left, right;
@@ -566,7 +566,7 @@ namespace coacd
             {
                 double E;
                 Plane pl = Plane(1.0, 0.0, 0.0, -i);
-                flag = clip_by_path(m, E, params, pl, best_path);
+                clip_by_path(m, E, params, pl, best_path);
                 if (E < best_cost && E < min_cost)
                 {
                     min_cost = E;
@@ -586,7 +586,7 @@ namespace coacd
             {
                 double E;
                 Plane pl = Plane(0.0, 1.0, 0.0, -i);
-                flag = clip_by_path(m, E, params, pl, best_path);
+                clip_by_path(m, E, params, pl, best_path);
                 if (E < best_cost && E < min_cost)
                 {
                     min_cost = E;
@@ -606,7 +606,7 @@ namespace coacd
             {
                 double E;
                 Plane pl = Plane(0.0, 0.0, 1.0, -i);
-                flag = clip_by_path(m, E, params, pl, best_path);
+                clip_by_path(m, E, params, pl, best_path);
                 if (E < best_cost && E < min_cost)
                 {
                     min_cost = E;
