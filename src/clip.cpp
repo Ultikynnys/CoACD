@@ -554,7 +554,11 @@ namespace coacd
 
     bool Clip(const Model &mesh, Model &pos, Model &neg, Plane &plane, double &cut_area, bool foo)
     {
-        logger::info("          [Clip] Start (mesh.points={}, mesh.tris={})", mesh.points.size(), mesh.triangles.size());
+        static int clip_call_count = 0;
+        clip_call_count++;
+        if (clip_call_count % 50 == 0 || clip_call_count < 5) {
+            logger::info("          [Clip] Call #{} (mesh.points={}, mesh.tris={})", clip_call_count, mesh.points.size(), mesh.triangles.size());
+        }
         Model t = mesh;
         vector<vec3d> border;
         vector<vec3d> overlap;
@@ -565,13 +569,11 @@ namespace coacd
 
         const int N = (int)mesh.points.size();
         int idx = 0;
-        logger::info("          [Clip] Creating pos/neg maps (N={})", N);
         std::vector<bool> pos_map(N, false);
         std::vector<bool> neg_map(N, false);
 
         map<pair<int, int>, int> edge_map;
         map<int, int> vertex_map;
-        logger::info("          [Clip] Starting triangle classification");
 
         {
             profiler::ScopedTimer t("Clip_TriangleClassification");
