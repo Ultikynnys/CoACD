@@ -570,17 +570,22 @@ namespace coacd
                 if (p % ((int)InputParts.size() / 10 + 1) == 0)
                     logger::info("Processing [{:.1f}%]", p * 100.0 / (int)InputParts.size());
 
+                logger::info("  [DEBUG] Part {} - Copying mesh (points={}, tris={})", p, InputParts[p].points.size(), InputParts[p].triangles.size());
                 Model pmesh = InputParts[p], pCH;
+                logger::info("  [DEBUG] Part {} - Computing APX (apx_mode={})", p, params.apx_mode);
                 Plane bestplane;
                 {
                     profiler::ScopedTimer timer("ComputeAPX");
                     pmesh.ComputeAPX(pCH, params.apx_mode, true);
                 }
+                logger::info("  [DEBUG] Part {} - APX done (pCH points={}, tris={})", p, pCH.points.size(), pCH.triangles.size());
                 double h;
                 {
                     profiler::ScopedTimer timer("ComputeHCost");
+                    logger::info("  [DEBUG] Part {} - Computing HCost (resolution={}, seed={})", p, params.resolution, params.seed);
                     h = ComputeHCost(pmesh, pCH, params.rv_k, params.resolution, params.seed, 0.0001, false);
                 }
+                logger::info("  [DEBUG] Part {} - HCost done (h={})", p, h);
 
                 if (h > params.threshold)
                 {
