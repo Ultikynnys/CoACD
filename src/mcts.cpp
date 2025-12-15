@@ -822,10 +822,15 @@ namespace coacd
 
     Node *MonteCarloTreeSearch(Params &params, Node *node, vector<Plane> &best_path)
     {
+        logger::info("    [MCTS] Starting MonteCarloTreeSearch");
         int computation_budget = params.mcts_iteration;
+        logger::info("    [MCTS] Getting initial mesh from node state");
         Model initial_mesh = node->get_state()->current_parts[0].current_mesh, initial_ch;
+        logger::info("    [MCTS] Computing APX for initial mesh");
         initial_mesh.ComputeAPX(initial_ch);
+        logger::info("    [MCTS] Computing Rv");
         double cost = ComputeRv(initial_mesh, initial_ch, params.rv_k) / params.mcts_max_depth;
+        logger::info("    [MCTS] Initial cost={}", cost);
         vector<Plane> current_path;
 
         // Early stopping on diminishing returns
@@ -834,13 +839,18 @@ namespace coacd
         int patience = std::max(20, computation_budget / 4);
         int stale = 0;
 
+        logger::info("    [MCTS] Starting iterations (budget={})", computation_budget);
         for (int i = 0; i < computation_budget; i++)
         {
+            if (i == 0) logger::info("    [MCTS] Iteration 0 - tree_policy start");
             current_path.clear();
             bool flag = false;
             Node *expand_node = tree_policy(node, cost, flag);
+            if (i == 0) logger::info("    [MCTS] Iteration 0 - default_policy start");
             double reward = default_policy(expand_node, params, current_path);
+            if (i == 0) logger::info("    [MCTS] Iteration 0 - backup start");
             backup(expand_node, reward, current_path, best_path);
+            if (i == 0) logger::info("    [MCTS] Iteration 0 complete (reward={})", reward);
 
             // Track improvement (we minimize reward)
             if (reward + 1e-12 < best_reward * (1.0 - improve_tol)) {
@@ -851,6 +861,7 @@ namespace coacd
             }
 
             if (stale >= patience) {
+                logger::info("    [MCTS] Early stopping at iteration {} (stale={})", i, stale);
                 break;
             }
         }
