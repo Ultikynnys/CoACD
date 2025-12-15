@@ -71,20 +71,114 @@ jobs:
           echo "Installing wheel: $WHEEL"
           python -m pip install "$WHEEL" numpy trimesh
           
-          # Run a quick CoACD test
-          python -c "
-          import trimesh
-          import coacd_u as coacd
+          # On Linux, enable core dumps and install gdb for backtrace
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            echo "Enabling core dumps for debugging..."
+            ulimit -c unlimited
+            sudo apt-get update && sudo apt-get install -y gdb || true
+          fi
           
-          print('Testing CoACD on Bottle.obj...')
-          coacd.set_log_level('info')
-          mesh = trimesh.load('examples/Bottle.obj', force='mesh')
-          coacd_mesh = coacd.Mesh(mesh.vertices, mesh.faces)
-          result = coacd.run_coacd(coacd_mesh, threshold=0.05)
-          print(f'SUCCESS: Generated {len(result)} convex hulls')
-          assert len(result) > 0, 'Expected at least one convex hull'
-          print('Test passed!')
-          "
+          # Create a Python test script with detailed debugging
+          cat > test_coacd.py << 'EOF'
+          import sys
+          import faulthandler
+          import signal
+          import traceback
+          
+          # Enable faulthandler to get Python stack trace on segfault
+          faulthandler.enable()
+          
+          # Also dump stack trace on SIGSEGV if possible
+          if hasattr(signal, 'SIGSEGV'):
+              faulthandler.register(signal.SIGSEGV)
+          
+          print("=" * 60, flush=True)
+          print("STEP 1: Importing modules...", flush=True)
+          try:
+              import trimesh
+              print("  - trimesh imported successfully", flush=True)
+          except Exception as e:
+              print(f"  - ERROR importing trimesh: {e}", flush=True)
+              sys.exit(1)
+          
+          try:
+              import coacd_u as coacd
+              print("  - coacd_u imported successfully", flush=True)
+          except Exception as e:
+              print(f"  - ERROR importing coacd_u: {e}", flush=True)
+              traceback.print_exc()
+              sys.exit(1)
+          
+          print("=" * 60, flush=True)
+          print("STEP 2: Setting log level...", flush=True)
+          try:
+              coacd.set_log_level('info')
+              print("  - Log level set to 'info'", flush=True)
+          except Exception as e:
+              print(f"  - ERROR setting log level: {e}", flush=True)
+              sys.exit(1)
+          
+          print("=" * 60, flush=True)
+          print("STEP 3: Loading mesh file...", flush=True)
+          try:
+              mesh = trimesh.load('examples/Bottle.obj', force='mesh')
+              print(f"  - Mesh loaded: {len(mesh.vertices)} vertices, {len(mesh.faces)} faces", flush=True)
+          except Exception as e:
+              print(f"  - ERROR loading mesh: {e}", flush=True)
+              sys.exit(1)
+          
+          print("=" * 60, flush=True)
+          print("STEP 4: Creating CoACD mesh object...", flush=True)
+          try:
+              coacd_mesh = coacd.Mesh(mesh.vertices, mesh.faces)
+              print("  - CoACD mesh created successfully", flush=True)
+          except Exception as e:
+              print(f"  - ERROR creating CoACD mesh: {e}", flush=True)
+              traceback.print_exc()
+              sys.exit(1)
+          
+          print("=" * 60, flush=True)
+          print("STEP 5: Running CoACD decomposition (THIS IS WHERE CRASH USUALLY HAPPENS)...", flush=True)
+          print("        Using threshold=0.05, single-threaded for debugging", flush=True)
+          sys.stdout.flush()
+          sys.stderr.flush()
+          
+          try:
+              # Run with OMP_NUM_THREADS=1 to test single-threaded first
+              import os
+              os.environ['OMP_NUM_THREADS'] = '1'
+              print(f"  - OMP_NUM_THREADS set to: {os.environ.get('OMP_NUM_THREADS')}", flush=True)
+              
+              result = coacd.run_coacd(coacd_mesh, threshold=0.05)
+              print(f"  - SUCCESS: Generated {len(result)} convex hulls", flush=True)
+              assert len(result) > 0, 'Expected at least one convex hull'
+              print("=" * 60, flush=True)
+              print("TEST PASSED!", flush=True)
+          except Exception as e:
+              print(f"  - ERROR running CoACD: {e}", flush=True)
+              traceback.print_exc()
+              sys.exit(1)
+          EOF
+          
+          echo "Running test with debugging enabled..."
+          python test_coacd.py 2>&1 || {
+            EXIT_CODE=$?
+            echo ""
+            echo "========================================"
+            echo "TEST FAILED with exit code: $EXIT_CODE"
+            echo "========================================"
+            
+            # On Linux, try to get a backtrace from core dump
+            if [[ "$RUNNER_OS" == "Linux" ]] && [[ -f core* || -f /tmp/core* ]]; then
+              echo "Attempting to get backtrace from core dump..."
+              CORE_FILE=$(ls -t core* /tmp/core* 2>/dev/null | head -1)
+              if [[ -f "$CORE_FILE" ]]; then
+                gdb -q -ex "bt full" -ex "quit" python "$CORE_FILE" 2>/dev/null || true
+              fi
+            fi
+            
+            exit $EXIT_CODE
+          }
 
       - name: Upload Wheels
         uses: actions/upload-artifact@v4
