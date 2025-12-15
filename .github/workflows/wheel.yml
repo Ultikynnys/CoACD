@@ -45,8 +45,6 @@ jobs:
             cp3{9,10,11,12,13}-win_amd64
           MACOSX_DEPLOYMENT_TARGET: "11"
           CIBW_BUILD_VERBOSITY: 1
-          # Disable assertions on Linux to avoid CDT assertion failures
-          CIBW_ENVIRONMENT_LINUX: 'CXXFLAGS="-DNDEBUG"'
           # Skip tests during wheel build
           CIBW_TEST_COMMAND: ""
           # Use default repair commands (cibuildwheel handles platform detection automatically)

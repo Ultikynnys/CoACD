@@ -66,7 +66,8 @@ class CMakeBuild(build_ext):
         if system == 'windows':
             cmake_args.append("-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded")
         elif system == 'linux':
-            cmake_args.append("-DCMAKE_CXX_FLAGS=-fPIC -static-libgcc -static-libstdc++")
+            # -DNDEBUG disables assertions in third-party libraries (like CDT) that cause crashes on Linux
+            cmake_args.append("-DCMAKE_CXX_FLAGS=-fPIC -static-libgcc -static-libstdc++ -DNDEBUG")
         elif system == 'darwin':
             cmake_args.append("-DCMAKE_CXX_FLAGS=-fPIC")
         
