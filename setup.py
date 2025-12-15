@@ -102,7 +102,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name="coacd_u",
-    version="1.0.19",
+    version="1.0.20",
     author_email="xiwei@ucsd.edu",
     keywords="collision convex decomposition",
     description="Approximate Convex Decomposition for 3D Meshes with Collision-Aware Concavity and Tree Search",

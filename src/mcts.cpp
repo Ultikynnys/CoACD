@@ -682,22 +682,29 @@ namespace coacd
     double default_policy(Node *node, Params &params, vector<Plane> &current_path)
     {
         profiler::ScopedTimer timer("MCTS_default_policy");
+        logger::info("      [default_policy] Start");
         State *original_state = node->get_state();
+        logger::info("      [default_policy] Copying state");
         State current_state = *original_state;
         double current_state_reward;
         original_state->worst_part_idx = current_state.worst_part_idx;
 
+        int loop_iter = 0;
         while (current_state.is_terminal() == false)
         {
+            if (loop_iter == 0) logger::info("      [default_policy] Loop iter 0 - getting planes");
             vector<Plane> planes;
             Plane bestplane;
             double bestcost, cut_area;
             planes = current_state.current_parts[current_state.worst_part_idx].available_moves;
+            if (loop_iter == 0) logger::info("      [default_policy] Loop iter 0 - planes.size()={}", planes.size());
             if ((int)planes.size() == 0)
             {
                 break;
             }
+            if (loop_iter == 0) logger::info("      [default_policy] Loop iter 0 - ComputeBestRvClippingPlane start");
             ComputeBestRvClippingPlane(current_state.current_parts[current_state.worst_part_idx].current_mesh, params, planes, bestplane, bestcost);
+            if (loop_iter == 0) logger::info("      [default_policy] Loop iter 0 - ComputeBestRvClippingPlane done");
 
             Model pos, neg, posCH, negCH;
             bool clipf;
