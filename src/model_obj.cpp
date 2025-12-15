@@ -374,26 +374,13 @@ namespace coacd
             // Use per-call seeding based on the provided seed and triangle index
             // This avoids using thread_local variables from OpenMP threads (crashes on Linux)
             std::mt19937 local_rng(seed + static_cast<unsigned int>(i));
-            std::uniform_int_distribution<int> seeder(0, 1000);
-            int local_seed = seeder(local_rng);
-            float r[2];
+            std::uniform_real_distribution<double> uniform(0.0, 1.0);
             for (int k = 0; k < N; k++)
             {
-                double a, b;
-                if (k % 3 == 0)
-                {
-                    std::uniform_real_distribution<double> uniform(0.0, 1.0);
-                    //// random sample using local RNG
-                    a = uniform(local_rng);
-                    b = uniform(local_rng);
-                }
-                else
-                {
-                    //// quasirandom sample
-                    i4_sobol(2, &local_seed, r);
-                    a = r[0];
-                    b = r[1];
-                }
+                // Use pure random sampling to avoid sobol.cpp's static variables
+                // which cause data races in OpenMP parallel regions
+                double a = uniform(local_rng);
+                double b = uniform(local_rng);
 
                 vec3d v;
                 v[0] = (1 - sqrt(a)) * points[triangles[i][0]][0] + (sqrt(a) * (1 - b)) * points[triangles[i][1]][0] + b * sqrt(a) * points[triangles[i][2]][0];
