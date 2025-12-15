@@ -506,6 +506,7 @@ namespace coacd
     bool ComputeBestRvClippingPlane(Model &m, Params &params, vector<Plane> &planes, Plane &bestplane, double &bestcost)
     {
         profiler::ScopedTimer timer("MCTS_ComputeBestRvClippingPlane");
+        logger::info("        [ComputeBestRvClippingPlane] Start (planes={}, points={})", planes.size(), m.points.size());
         if ((int)planes.size() == 0)
             return false;
         
@@ -520,6 +521,7 @@ namespace coacd
         // Early stopping threshold
         double early_stop_threshold = params.threshold * 0.8;
         
+        logger::info("        [ComputeBestRvClippingPlane] Creating indices");
         // Shuffle to get random sampling - use local RNG to avoid thread_local TLS issues
         std::vector<int> indices(planes.size());
         for (int i = 0; i < (int)planes.size(); i++) indices[i] = i;
@@ -527,6 +529,7 @@ namespace coacd
         std::mt19937 local_rng(static_cast<unsigned int>(planes.size()));
         std::shuffle(indices.begin(), indices.end(), local_rng);
         
+        logger::info("        [ComputeBestRvClippingPlane] Pre-filter loop");
         // Pre-filter: quick imbalance check to reduce candidate set; then order by balance closeness to 50/50
         struct Cand { int idx; double score; };
         std::vector<Cand> candidates;
@@ -560,6 +563,7 @@ namespace coacd
             candidates.push_back({i, score});
         }
 
+        logger::info("        [ComputeBestRvClippingPlane] Sorting candidates (count={})", candidates.size());
         // Sort candidates by increasing imbalance (i.e., most balanced first)
         std::sort(candidates.begin(), candidates.end(), [](const Cand& a, const Cand& b){ return a.score < b.score; });
         std::vector<int> filtered_indices;
@@ -568,6 +572,8 @@ namespace coacd
         
         if (filtered_indices.empty())
             return false;
+        
+        logger::info("        [ComputeBestRvClippingPlane] Evaluating planes (count={})", filtered_indices.size());
         
         // Parallel evaluation of candidate planes
         // IMPORTANT: Only parallelize if we're NOT already in a parallel region
