@@ -334,6 +334,12 @@ namespace coacd
     void RemoveOutlierTriangles(vector<vec3d> border, vector<vec3d> overlap, vector<pair<int, int>> border_edges, vector<vec3i> border_triangles, int oriN,
                                 map<int, int> &vertex_map, vector<vec3d> &final_border, vector<vec3i> &final_triangles)
     {
+        static int calls = 0;
+        calls++;
+        bool is_debug = (calls % 20 == 0); // Sample logs to avoid spam, but we might want it for the crash
+        // Since we know Clip Call #4 crashes, and there are few RemoveOutlierTriangles calls before that, we can log all
+        logger::info("    [RemoveOutlierTriangles] Start (border={}, edges={}, tris={}, oriN={})", border.size(), border_edges.size(), border_triangles.size(), oriN);
+
         deque<pair<int, int>> BFS_edges(border_edges.begin(), border_edges.end());
         std::unordered_map<pair<int, int>, pair<int, int>, PairHash> edge_map;
         std::unordered_set<pair<int, int>, PairHash> border_map;
@@ -557,9 +563,14 @@ namespace coacd
     {
         static int clip_call_count = 0;
         clip_call_count++;
-        if (clip_call_count % 50 == 0 || clip_call_count < 5) {
+        bool is_target = (clip_call_count == 4); // Target crash call
+
+        if (clip_call_count % 50 == 0 || clip_call_count < 10) {
             logger::info("          [Clip] Call #{} (mesh.points={}, mesh.tris={})", clip_call_count, mesh.points.size(), mesh.triangles.size());
         }
+
+        if (is_target) logger::info("          [Clip] Call #4 - Starting execution");
+
         Model t = mesh;
         vector<vec3d> border;
         vector<vec3d> overlap;
@@ -569,35 +580,44 @@ namespace coacd
         vector<vec3d> final_border;
 
         const int N = (int)mesh.points.size();
+        if (is_target) logger::info("          [Clip] Call #4 - Allocating vectors (N={})", N);
+        
         int idx = 0;
         // Using vector<char> instead of vector<bool> to avoid platform-specific issues
-        // vector<bool> is a special template that stores bits packed, which can cause issues on Linux
         std::vector<char> pos_map(N, 0);
         std::vector<char> neg_map(N, 0);
 
         map<pair<int, int>, int> edge_map;
         map<int, int> vertex_map;
 
+        if (is_target) logger::info("          [Clip] Call #4 - Starting Classification Loop");
         {
             // profiler::ScopedTimer disabled to debug x86 Linux crash
             for (int i = 0; i < (int)mesh.triangles.size(); i++)
             {
+                if (is_target && (i == 0 || i == mesh.triangles.size()-1)) 
+                    logger::info("          [Clip] Call #4 - Classifying triangle {}/{}", i, mesh.triangles.size());
+
                 int id0, id1, id2;
-            id0 = mesh.triangles[i][0];
-            id1 = mesh.triangles[i][1];
-            id2 = mesh.triangles[i][2];
-            // Bounds check - triangle indices must be valid
-            if (id0 < 0 || id0 >= N || id1 < 0 || id1 >= N || id2 < 0 || id2 >= N) {
-                logger::error("[Clip] INVALID TRIANGLE INDICES at i={}: id0={}, id1={}, id2={}, N={}", i, id0, id1, id2, N);
-                continue; // Skip invalid triangles instead of crashing
-            }
-            vec3d p0, p1, p2;
-            p0 = mesh.points[id0];
-            p1 = mesh.points[id1];
-            p2 = mesh.points[id2];
-            short s0 = plane.Side(p0), s1 = plane.Side(p1), s2 = plane.Side(p2);
-            short sum = s0 + s1 + s2;
-            if (s0 == 0 && s1 == 0 && s2 == 0)
+                id0 = mesh.triangles[i][0];
+                id1 = mesh.triangles[i][1];
+                id2 = mesh.triangles[i][2];
+                // Bounds check - triangle indices must be valid
+                if (id0 < 0 || id0 >= N || id1 < 0 || id1 >= N || id2 < 0 || id2 >= N) {
+                    logger::error("[Clip] INVALID TRIANGLE INDICES at i={}: id0={}, id1={}, id2={}, N={}", i, id0, id1, id2, N);
+                    continue; // Skip invalid triangles instead of crashing
+                }
+                vec3d p0, p1, p2;
+                p0 = mesh.points[id0];
+                p1 = mesh.points[id1];
+                p2 = mesh.points[id2];
+                
+                // Potential crash point: Plane::Side logic
+                short s0 = plane.Side(p0);
+                short s1 = plane.Side(p1);
+                short s2 = plane.Side(p2);
+                short sum = s0 + s1 + s2;
+                if (s0 == 0 && s1 == 0 && s2 == 0)
             {
                 s0 = s1 = s2 = plane.CutSide(p0, p1, p2, plane);
                 sum = s0 + s1 + s2;
@@ -947,13 +967,17 @@ namespace coacd
             int oriN = (int)border.size();
             short flag;
             {
+                if (is_target) logger::info("          [Clip] Call #4 - Starting Triangulation (border size={})", border.size());
                 profiler::ScopedTimer t("Clip_Triangulation");
                 flag = Triangulation(border, border_edges, border_triangles, plane);
+                if (is_target) logger::info("          [Clip] Call #4 - Triangulation done (flag={})", flag);
             }
             if (flag == 0)
             {
+                if (is_target) logger::info("          [Clip] Call #4 - Starting RemoveOutlierTriangles");
                 profiler::ScopedTimer t("Clip_RemoveOutliers");
                 RemoveOutlierTriangles(border, overlap, border_edges, border_triangles, oriN, border_map, final_border, final_triangles);
+                if (is_target) logger::info("          [Clip] Call #4 - RemoveOutlierTriangles done");
             }
             else if (flag == 1)
                 final_border = border; // remember to fill final_border with border!
