@@ -338,8 +338,8 @@ namespace coacd
         std::unordered_set<pair<int, int>, PairHash> same_edge_map;
         const int v_lenth = (int)border.size();
         const int f_lenth = (int)border_triangles.size();
-        bool *add_vertex = new bool[v_lenth]();
-        bool *remove_map = new bool[f_lenth]();
+        std::vector<bool> add_vertex(v_lenth, false);
+        std::vector<bool> remove_map(f_lenth, false);
 
         // Build a quantized index for border vertices, then mark overlaps quickly
         std::unordered_map<QKey, int, QKeyHash> border_index_map;
@@ -547,8 +547,7 @@ namespace coacd
                 vertex_map[i + 1] = ++index;
             }
         }
-        delete[] add_vertex;
-        delete[] remove_map;
+
     }
 
     bool Clip(const Model &mesh, Model &pos, Model &neg, Plane &plane, double &cut_area, bool foo)
@@ -563,8 +562,8 @@ namespace coacd
 
         const int N = (int)mesh.points.size();
         int idx = 0;
-        bool *pos_map = new bool[N]();
-        bool *neg_map = new bool[N]();
+        std::vector<bool> pos_map(N, false);
+        std::vector<bool> neg_map(N, false);
 
         map<pair<int, int>, int> edge_map;
         map<int, int> vertex_map;
@@ -961,8 +960,8 @@ namespace coacd
             double neg_x_min = INF, neg_x_max = -INF, neg_y_min = INF, neg_y_max = -INF, neg_z_min = INF, neg_z_max = -INF;
 
             int pos_idx = 0, neg_idx = 0;
-            int *pos_proj = new int[N]();
-            int *neg_proj = new int[N]();
+            std::vector<int> pos_proj(N, 0);
+            std::vector<int> neg_proj(N, 0);
             for (int i = 0; i < N; i++)
         {
             if (pos_map[i] == true)
@@ -1079,10 +1078,7 @@ namespace coacd
                                      neg_N + border_map[final_triangles[i][1]] - 1,
                                      neg_N + border_map[final_triangles[i][0]] - 1});
             }
-            delete[] pos_proj;
-            delete[] neg_proj;
-            delete[] neg_map;
-            delete[] pos_map;
+
         }
 
         return true;
