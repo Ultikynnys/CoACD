@@ -340,8 +340,9 @@ namespace coacd
         std::unordered_set<pair<int, int>, PairHash> same_edge_map;
         const int v_lenth = (int)border.size();
         const int f_lenth = (int)border_triangles.size();
-        std::vector<bool> add_vertex(v_lenth, false);
-        std::vector<bool> remove_map(f_lenth, false);
+        // Using vector<char> instead of vector<bool> to avoid platform-specific issues on Linux
+        std::vector<char> add_vertex(v_lenth, 0);
+        std::vector<char> remove_map(f_lenth, 0);
 
         // Build a quantized index for border vertices, then mark overlaps quickly
         std::unordered_map<QKey, int, QKeyHash> border_index_map;
@@ -578,7 +579,7 @@ namespace coacd
         map<int, int> vertex_map;
 
         {
-            profiler::ScopedTimer t("Clip_TriangleClassification");
+            // profiler::ScopedTimer disabled to debug x86 Linux crash
             for (int i = 0; i < (int)mesh.triangles.size(); i++)
             {
                 int id0, id1, id2;
