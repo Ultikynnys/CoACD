@@ -1,0 +1,98 @@
+name: Test x86 Linux Only
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build_test_x86:
+    runs-on: ubuntu-latest
+    name: Build and Test x86_64 Linux
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install Dependencies
+        run: pip3 install -U wheel
+
+      - name: Build Wheels (Python 3.12 only for speed)
+        uses: pypa/cibuildwheel@v2.22.0
+        env:
+          CIBW_ARCHS: 'x86_64'
+          CIBW_BUILD: 'cp312-manylinux_x86_64'
+          CIBW_BUILD_VERBOSITY: 1
+          CIBW_TEST_COMMAND: ""
+
+      - name: List Build Results
+        shell: bash
+        run: ls -lh wheelhouse
+
+      - name: Test Wheel Functionality
+        shell: bash
+        run: |
+          echo "Testing wheel functionality with example mesh..."
+          WHEEL=$(ls wheelhouse/*.whl | head -1)
+          echo "Installing wheel: $WHEEL"
+          python -m pip install "$WHEEL" numpy trimesh
+          
+          # Enable core dumps
+          echo "Enabling core dumps for debugging..."
+          ulimit -c unlimited
+          sudo apt-get update && sudo apt-get install -y gdb || true
+          
+          # Create test script
+          cat > test_coacd.py << 'EOF'
+          import sys
+          import faulthandler
+          import traceback
+          import os
+          
+          faulthandler.enable()
+          os.environ['OMP_NUM_THREADS'] = '1'
+          
+          print("=" * 60, flush=True)
+          print("Testing CoACD on x86_64 Linux...", flush=True)
+          
+          import trimesh
+          import coacd_u as coacd
+          
+          coacd.set_log_level('info')
+          mesh = trimesh.load('examples/Bottle.obj', force='mesh')
+          print(f"Mesh loaded: {len(mesh.vertices)} vertices, {len(mesh.faces)} faces", flush=True)
+          
+          coacd_mesh = coacd.Mesh(mesh.vertices, mesh.faces)
+          print("Running CoACD decomposition...", flush=True)
+          
+          result = coacd.run_coacd(coacd_mesh, threshold=0.05)
+          print(f"SUCCESS: Generated {len(result)} convex hulls", flush=True)
+          assert len(result) > 0, 'Expected at least one convex hull'
+          print("TEST PASSED!", flush=True)
+          EOF
+          
+          echo "Running test..."
+          python test_coacd.py 2>&1 || {
+            EXIT_CODE=$?
+            echo ""
+            echo "========================================"
+            echo "TEST FAILED with exit code: $EXIT_CODE"
+            echo "========================================"
+            
+            # Try to get backtrace from core dump
+            CORE_FILE=$(ls -t core* /tmp/core* 2>/dev/null | head -1)
+            if [[ -f "$CORE_FILE" ]]; then
+              echo "Backtrace from core dump:"
+              gdb -q -ex "bt full" -ex "quit" python "$CORE_FILE" 2>/dev/null || true
+            fi
+            
+            exit $EXIT_CODE
+          }
+
+      - name: Upload Wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux-x86_64
+          path: ./wheelhouse/*.whl
+          if-no-files-found: warn

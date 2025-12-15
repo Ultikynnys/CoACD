@@ -1,9 +1,7 @@
 name: Build Wheels
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+  # Removed push trigger to avoid expensive builds on every commit
 
 jobs:
   build_wheels:
