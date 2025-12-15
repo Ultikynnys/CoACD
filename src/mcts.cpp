@@ -497,7 +497,9 @@ namespace coacd
 
         if (shuffle)
         {
-            std::shuffle(planes.begin(), planes.end(), coacd::random_engine);
+            // Use a local RNG to avoid thread_local TLS issues on Linux with OpenMP
+            std::mt19937 local_rng(mcts_nodes);
+            std::shuffle(planes.begin(), planes.end(), local_rng);
         }
     }
 
@@ -518,18 +520,12 @@ namespace coacd
         // Early stopping threshold
         double early_stop_threshold = params.threshold * 0.8;
         
-        // Shuffle to get random sampling - but only if not in nested parallel region
-        // Using thread_local random_engine in nested OpenMP can cause issues on Linux
+        // Shuffle to get random sampling - use local RNG to avoid thread_local TLS issues
         std::vector<int> indices(planes.size());
         for (int i = 0; i < (int)planes.size(); i++) indices[i] = i;
-#ifdef _OPENMP
-        if (!omp_in_parallel()) {
-            std::shuffle(indices.begin(), indices.end(), coacd::random_engine);
-        }
-        // If already in parallel, use deterministic ordering to avoid thread_local issues
-#else
-        std::shuffle(indices.begin(), indices.end(), coacd::random_engine);
-#endif
+        // Use a local RNG seeded from planes.size() for deterministic but varied ordering
+        std::mt19937 local_rng(static_cast<unsigned int>(planes.size()));
+        std::shuffle(indices.begin(), indices.end(), local_rng);
         
         // Pre-filter: quick imbalance check to reduce candidate set; then order by balance closeness to 50/50
         struct Cand { int idx; double score; };

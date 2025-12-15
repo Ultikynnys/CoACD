@@ -10,7 +10,8 @@
 
 namespace coacd
 {
-    thread_local std::mt19937 random_engine;
+    // Note: random_engine removed - use local std::mt19937 seeded from params.seed instead
+    // to avoid thread_local TLS issues on Linux with OpenMP
 
     bool IsManifold(Model &input)
     {
@@ -564,7 +565,8 @@ namespace coacd
 #endif
             for (int p = 0; p < (int)InputParts.size(); p++)
             {
-                random_engine.seed(params.seed);
+                // Create a per-iteration local random engine to avoid thread_local TLS issues on Linux
+                std::mt19937 local_rng(params.seed + static_cast<unsigned int>(p));
                 if (p % ((int)InputParts.size() / 10 + 1) == 0)
                     logger::info("Processing [{:.1f}%]", p * 100.0 / (int)InputParts.size());
 

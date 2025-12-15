@@ -24,7 +24,7 @@
 
 namespace coacd
 {
-  extern thread_local std::mt19937 random_engine;
+  // random_engine removed - use local std::mt19937 to avoid thread_local TLS issues on Linux with OpenMP
 
   void DecimateCH(Model &ch, int tgt_pts, string apx_mode);
   void DecimateConvexHulls(vector<Model> &cvxs, Params &params);
