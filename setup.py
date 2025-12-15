@@ -125,7 +125,7 @@ setup(
     ],
     license="MIT",
     url="https://colin97.github.io/CoACD/",
-    packages=["coacd_u"],
+    packages=["coacd_u", "coacd_u.bin"],
     python_requires=">=3.9",
     install_requires=["numpy"],
     ext_modules=[CMakeExtension("coacd_u")],
