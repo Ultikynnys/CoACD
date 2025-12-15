@@ -563,15 +563,19 @@ namespace coacd
     {
         static int clip_call_count = 0;
         clip_call_count++;
-        bool is_target = (clip_call_count == 4); // Target crash call
+        // Target calls 1-20 to catch the crash at Call #9 (and potential fluctuations)
+        bool is_target = (clip_call_count < 20); 
 
-        if (clip_call_count % 50 == 0 || clip_call_count < 10) {
+        if (clip_call_count % 50 == 0 || clip_call_count < 20) {
             logger::info("          [Clip] Call #{} (mesh.points={}, mesh.tris={})", clip_call_count, mesh.points.size(), mesh.triangles.size());
         }
 
-        if (is_target) logger::info("          [Clip] Call #4 - Starting execution");
-
+        if (is_target) logger::info("          [Clip] Call #{} - Starting execution", clip_call_count);
+        
+        if (is_target) logger::info("          [Clip] Call #{} - Copying mesh", clip_call_count);
         Model t = mesh;
+        if (is_target) logger::info("          [Clip] Call #{} - Mesh copied", clip_call_count);
+        
         vector<vec3d> border;
         vector<vec3d> overlap;
         vector<vec3i> border_triangles, final_triangles;
@@ -580,7 +584,7 @@ namespace coacd
         vector<vec3d> final_border;
 
         const int N = (int)mesh.points.size();
-        if (is_target) logger::info("          [Clip] Call #4 - Allocating vectors (N={})", N);
+        if (is_target) logger::info("          [Clip] Call #{} - Allocating vectors (N={})", clip_call_count, N);
         
         int idx = 0;
         // Using vector<char> instead of vector<bool> to avoid platform-specific issues
@@ -590,13 +594,13 @@ namespace coacd
         map<pair<int, int>, int> edge_map;
         map<int, int> vertex_map;
 
-        if (is_target) logger::info("          [Clip] Call #4 - Starting Classification Loop");
+        if (is_target) logger::info("          [Clip] Call #{} - Starting Classification Loop", clip_call_count);
         {
             // profiler::ScopedTimer disabled to debug x86 Linux crash
             for (int i = 0; i < (int)mesh.triangles.size(); i++)
             {
                 if (is_target && (i == 0 || i == mesh.triangles.size()-1)) 
-                    logger::info("          [Clip] Call #4 - Classifying triangle {}/{}", i, mesh.triangles.size());
+                    logger::info("          [Clip] Call #{} - Classifying triangle {}/{}", clip_call_count, i, mesh.triangles.size());
 
                 int id0, id1, id2;
                 id0 = mesh.triangles[i][0];
@@ -964,20 +968,21 @@ namespace coacd
 
         if (border.size() > 2)
         {
+            if (is_target) logger::info("          [Clip] Call #{} - Classification Loop Done. Border size: {}", clip_call_count, border.size());
             int oriN = (int)border.size();
             short flag;
             {
-                if (is_target) logger::info("          [Clip] Call #4 - Starting Triangulation (border size={})", border.size());
+                if (is_target) logger::info("          [Clip] Call #{} - Starting Triangulation (border size={})", clip_call_count, border.size());
                 profiler::ScopedTimer t("Clip_Triangulation");
                 flag = Triangulation(border, border_edges, border_triangles, plane);
-                if (is_target) logger::info("          [Clip] Call #4 - Triangulation done (flag={})", flag);
+                if (is_target) logger::info("          [Clip] Call #{} - Triangulation done (flag={})", clip_call_count, flag);
             }
             if (flag == 0)
             {
-                if (is_target) logger::info("          [Clip] Call #4 - Starting RemoveOutlierTriangles");
+                if (is_target) logger::info("          [Clip] Call #{} - Starting RemoveOutlierTriangles", clip_call_count);
                 profiler::ScopedTimer t("Clip_RemoveOutliers");
                 RemoveOutlierTriangles(border, overlap, border_edges, border_triangles, oriN, border_map, final_border, final_triangles);
-                if (is_target) logger::info("          [Clip] Call #4 - RemoveOutlierTriangles done");
+                if (is_target) logger::info("          [Clip] Call #{} - RemoveOutlierTriangles done", clip_call_count);
             }
             else if (flag == 1)
                 final_border = border; // remember to fill final_border with border!
