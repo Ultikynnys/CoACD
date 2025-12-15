@@ -338,7 +338,7 @@ namespace coacd
         calls++;
         bool is_debug = (calls % 20 == 0); // Sample logs to avoid spam, but we might want it for the crash
         // Since we know Clip Call #4 crashes, and there are few RemoveOutlierTriangles calls before that, we can log all
-        logger::info("    [RemoveOutlierTriangles] Start (border={}, edges={}, tris={}, oriN={})", border.size(), border_edges.size(), border_triangles.size(), oriN);
+        // logger::info("    [RemoveOutlierTriangles] Start (border={}, edges={}, tris={}, oriN={})", border.size(), border_edges.size(), border_triangles.size(), oriN);
 
         deque<pair<int, int>> BFS_edges(border_edges.begin(), border_edges.end());
         std::unordered_map<pair<int, int>, pair<int, int>, PairHash> edge_map;
@@ -566,15 +566,15 @@ namespace coacd
         // Target calls 1-20 to catch the crash at Call #9 (and potential fluctuations)
         bool is_target = (clip_call_count < 20); 
 
-        if (clip_call_count % 50 == 0 || clip_call_count < 20) {
-            logger::info("          [Clip] Call #{} (mesh.points={}, mesh.tris={})", clip_call_count, mesh.points.size(), mesh.triangles.size());
-        }
+        // if (clip_call_count % 50 == 0 || clip_call_count < 20) {
+        //     logger::info("          [Clip] Call #{} (mesh.points={}, mesh.tris={})", clip_call_count, mesh.points.size(), mesh.triangles.size());
+        // }
 
-        if (is_target) logger::info("          [Clip] Call #{} - Starting execution", clip_call_count);
+        // if (is_target) logger::info("          [Clip] Call #{} - Starting execution", clip_call_count);
         
-        if (is_target) logger::info("          [Clip] Call #{} - Copying mesh", clip_call_count);
+        // if (is_target) logger::info("          [Clip] Call #{} - Copying mesh", clip_call_count);
         Model t = mesh;
-        if (is_target) logger::info("          [Clip] Call #{} - Mesh copied", clip_call_count);
+        // if (is_target) logger::info("          [Clip] Call #{} - Mesh copied", clip_call_count);
         
         vector<vec3d> border;
         vector<vec3d> overlap;
@@ -584,7 +584,7 @@ namespace coacd
         vector<vec3d> final_border;
 
         const int N = (int)mesh.points.size();
-        if (is_target) logger::info("          [Clip] Call #{} - Allocating vectors (N={})", clip_call_count, N);
+        // if (is_target) logger::info("          [Clip] Call #{} - Allocating vectors (N={})", clip_call_count, N);
         
         int idx = 0;
         // Using vector<char> instead of vector<bool> to avoid platform-specific issues
@@ -594,13 +594,13 @@ namespace coacd
         map<pair<int, int>, int> edge_map;
         map<int, int> vertex_map;
 
-        if (is_target) logger::info("          [Clip] Call #{} - Starting Classification Loop", clip_call_count);
+        // if (is_target) logger::info("          [Clip] Call #{} - Starting Classification Loop", clip_call_count);
         {
             // profiler::ScopedTimer disabled to debug x86 Linux crash
             for (int i = 0; i < (int)mesh.triangles.size(); i++)
             {
-                if (is_target && (i == 0 || i == mesh.triangles.size()-1)) 
-                    logger::info("          [Clip] Call #{} - Classifying triangle {}/{}", clip_call_count, i, mesh.triangles.size());
+                // if (is_target && (i == 0 || i == mesh.triangles.size()-1)) 
+                //     logger::info("          [Clip] Call #{} - Classifying triangle {}/{}", clip_call_count, i, mesh.triangles.size());
 
                 int id0, id1, id2;
                 id0 = mesh.triangles[i][0];

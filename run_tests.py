@@ -1,7 +1,7 @@
 import trimesh
 import os
 import glob
-import coacd
+import coacd_u as coacd
 import numpy
 import unittest
 

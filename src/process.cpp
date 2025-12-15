@@ -570,42 +570,42 @@ namespace coacd
                 if (p % ((int)InputParts.size() / 10 + 1) == 0)
                     logger::info("Processing [{:.1f}%]", p * 100.0 / (int)InputParts.size());
 
-                logger::info("  [DEBUG] Part {} - Copying mesh (points={}, tris={})", p, InputParts[p].points.size(), InputParts[p].triangles.size());
+                // logger::info("  [DEBUG] Part {} - Copying mesh (points={}, tris={})", p, InputParts[p].points.size(), InputParts[p].triangles.size());
                 Model pmesh = InputParts[p], pCH;
-                logger::info("  [DEBUG] Part {} - Computing APX (apx_mode={})", p, params.apx_mode);
+                // logger::info("  [DEBUG] Part {} - Computing APX (apx_mode={})", p, params.apx_mode);
                 Plane bestplane;
                 {
                     profiler::ScopedTimer timer("ComputeAPX");
                     pmesh.ComputeAPX(pCH, params.apx_mode, true);
                 }
-                logger::info("  [DEBUG] Part {} - APX done (pCH points={}, tris={})", p, pCH.points.size(), pCH.triangles.size());
+                // logger::info("  [DEBUG] Part {} - APX done (pCH points={}, tris={})", p, pCH.points.size(), pCH.triangles.size());
                 double h;
                 {
                     profiler::ScopedTimer timer("ComputeHCost");
-                    logger::info("  [DEBUG] Part {} - Computing HCost (resolution={}, seed={})", p, params.resolution, params.seed);
+                    // logger::info("  [DEBUG] Part {} - Computing HCost (resolution={}, seed={})", p, params.resolution, params.seed);
                     h = ComputeHCost(pmesh, pCH, params.rv_k, params.resolution, params.seed, 0.0001, false);
                 }
-                logger::info("  [DEBUG] Part {} - HCost done (h={})", p, h);
+                // logger::info("  [DEBUG] Part {} - HCost done (h={})", p, h);
 
                 if (h > params.threshold)
                 {
-                    logger::info("  [DEBUG] Part {} - Entering MCTS block (h={} > threshold={})", p, h, params.threshold);
+                    // logger::info("  [DEBUG] Part {} - Entering MCTS block (h={} > threshold={})", p, h, params.threshold);
                     vector<Plane> planes, best_path;
 
                     // MCTS for cutting plane
-                    logger::info("  [DEBUG] Part {} - Creating Node", p);
+                    // logger::info("  [DEBUG] Part {} - Creating Node", p);
                     auto node = std::make_unique<Node>(params);
-                    logger::info("  [DEBUG] Part {} - Creating State", p);
+                    // logger::info("  [DEBUG] Part {} - Creating State", p);
                     State state(params, pmesh);
-                    logger::info("  [DEBUG] Part {} - Setting state on node", p);
+                    // logger::info("  [DEBUG] Part {} - Setting state on node", p);
                     node->set_state(state);
-                    logger::info("  [DEBUG] Part {} - Starting MonteCarloTreeSearch", p);
+                    // logger::info("  [DEBUG] Part {} - Starting MonteCarloTreeSearch", p);
                     Node *best_next_node;
                     {
                         profiler::ScopedTimer timer("MonteCarloTreeSearch");
                         best_next_node = MonteCarloTreeSearch(params, node.get(), best_path);
                     }
-                    logger::info("  [DEBUG] Part {} - MonteCarloTreeSearch done (best_next_node={})", p, (best_next_node ? "valid" : "null"));
+                    // logger::info("  [DEBUG] Part {} - MonteCarloTreeSearch done (best_next_node={})", p, (best_next_node ? "valid" : "null"));
                     if (best_next_node == nullptr)
                     {
 #ifdef _OPENMP
