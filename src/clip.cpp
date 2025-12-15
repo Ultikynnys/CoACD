@@ -581,6 +581,11 @@ namespace coacd
             id0 = mesh.triangles[i][0];
             id1 = mesh.triangles[i][1];
             id2 = mesh.triangles[i][2];
+            // Bounds check - triangle indices must be valid
+            if (id0 < 0 || id0 >= N || id1 < 0 || id1 >= N || id2 < 0 || id2 >= N) {
+                logger::error("[Clip] INVALID TRIANGLE INDICES at i={}: id0={}, id1={}, id2={}, N={}", i, id0, id1, id2, N);
+                continue; // Skip invalid triangles instead of crashing
+            }
             vec3d p0, p1, p2;
             p0 = mesh.points[id0];
             p1 = mesh.points[id1];
