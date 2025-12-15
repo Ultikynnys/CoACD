@@ -588,6 +588,7 @@ namespace coacd
 #endif
         for (int idx = 0; idx < (int)filtered_indices.size(); idx++)
         {
+            if (idx == 0) logger::info("        [ComputeBestRvClippingPlane] Loop idx=0 starting");
             // Early exit if another thread found a great plane
             if (found_good_plane.load(std::memory_order_relaxed))
                 continue;
@@ -596,11 +597,13 @@ namespace coacd
             double cut_area;
             Model pos, neg, posCH, negCH;
             
+            if (idx == 0) logger::info("        [ComputeBestRvClippingPlane] Loop idx=0 - Clip start (plane_idx={})", i);
             bool flag;
             {
                 profiler::ScopedTimer t("MCTS_PlaneEval_Clip");
                 flag = Clip(m, pos, neg, planes[i], cut_area, true);
             }
+            if (idx == 0) logger::info("        [ComputeBestRvClippingPlane] Loop idx=0 - Clip done (flag={}, pos={}, neg={})", flag, pos.points.size(), neg.points.size());
             
             if (!flag || pos.points.size() <= 0 || neg.points.size() <= 0)
             {
@@ -608,17 +611,21 @@ namespace coacd
                 continue;
             }
             
+            if (idx == 0) logger::info("        [ComputeBestRvClippingPlane] Loop idx=0 - ComputeAPX start");
             {
                 profiler::ScopedTimer t("MCTS_PlaneEval_ComputeAPX");
                 pos.ComputeAPX(posCH);
                 neg.ComputeAPX(negCH);
             }
+            if (idx == 0) logger::info("        [ComputeBestRvClippingPlane] Loop idx=0 - ComputeAPX done");
             
+            if (idx == 0) logger::info("        [ComputeBestRvClippingPlane] Loop idx=0 - ComputeTotalRv start");
             double H;
             {
                 profiler::ScopedTimer t("MCTS_PlaneEval_ComputeTotalRv");
                 H = ComputeTotalRv(m, pos, posCH, neg, negCH, params.rv_k, planes[i]);
             }
+            if (idx == 0) logger::info("        [ComputeBestRvClippingPlane] Loop idx=0 - ComputeTotalRv done (H={})", H);
             
             costs[idx] = H;
             
