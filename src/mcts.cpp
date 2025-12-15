@@ -582,8 +582,7 @@ namespace coacd
 #ifdef _OPENMP
         // Check if we're already in a parallel region - avoid nested parallelism
         bool already_parallel = omp_in_parallel();
-        if (!already_parallel) {
-#pragma omp parallel for schedule(dynamic, 1) shared(found_good_plane, costs, filtered_indices, m, params, planes, early_stop_threshold)
+#pragma omp parallel for schedule(dynamic, 1) shared(found_good_plane, costs, filtered_indices, m, params, planes, early_stop_threshold) if(!already_parallel)
 #endif
         for (int idx = 0; idx < (int)filtered_indices.size(); idx++)
         {
@@ -625,9 +624,6 @@ namespace coacd
             if (H < early_stop_threshold)
                 found_good_plane.store(true, std::memory_order_relaxed);
         }
-#ifdef _OPENMP
-        } // end if (!already_parallel)
-#endif
         
         // Find best plane from parallel results
         int best_idx = -1;
