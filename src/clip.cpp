@@ -569,8 +569,10 @@ namespace coacd
 
         const int N = (int)mesh.points.size();
         int idx = 0;
-        std::vector<bool> pos_map(N, false);
-        std::vector<bool> neg_map(N, false);
+        // Using vector<char> instead of vector<bool> to avoid platform-specific issues
+        // vector<bool> is a special template that stores bits packed, which can cause issues on Linux
+        std::vector<char> pos_map(N, 0);
+        std::vector<char> neg_map(N, 0);
 
         map<pair<int, int>, int> edge_map;
         map<int, int> vertex_map;
