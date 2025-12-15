@@ -60,6 +60,7 @@ class CMakeBuild(build_ext):
             "-DCMAKE_BUILD_TYPE={}".format(cfg),  # not used on MSVC, but no harm
             "-DOPENVDB_CORE_SHARED=OFF",
             "-DTBB_TEST=OFF",
+            "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
 
         ]
         
