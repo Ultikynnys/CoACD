@@ -26,7 +26,10 @@ namespace coacd
 
         for (int i = 1; i < (int)points.size(); i++)
         {
-            double dist = sqrt(pow(points[idx0][0] - points[i][0], 2) + pow(points[idx0][1] - points[i][1], 2) + pow(points[idx0][2] - points[i][2], 2));
+            double dx = points[idx0][0] - points[i][0];
+            double dy = points[idx0][1] - points[i][1];
+            double dz = points[idx0][2] - points[i][2];
+            double dist = sqrt(dx*dx + dy*dy + dz*dz);
             if (dist > 0.01)
             {
                 flag = 1;
@@ -54,7 +57,9 @@ namespace coacd
             BC[2] = p2[2] - p1[2];
 
             double dot_product = AB[0] * BC[0] + AB[1] * BC[1] + AB[2] * BC[2];
-            double res = dot_product / (sqrt(pow(AB[0], 2) + pow(AB[1], 2) + pow(AB[2], 2)) * sqrt(pow(BC[0], 2) + pow(BC[1], 2) + pow(BC[2], 2)));
+            double len_AB = sqrt(AB[0]*AB[0] + AB[1]*AB[1] + AB[2]*AB[2]);
+            double len_BC = sqrt(BC[0]*BC[0] + BC[1]*BC[1] + BC[2]*BC[2]);
+            double res = dot_product / (len_AB * len_BC);
             if (fabs(fabs(res) - 1) > 1e-6 && fabs(res) < INF) // AB not \\ BC, dot product != 1
             {
                 flag = 1;
@@ -71,9 +76,11 @@ namespace coacd
         double a = (p1[1] - p0[1]) * (p2[2] - p0[2]) - (p1[2] - p0[2]) * (p2[1] - p0[1]);
         double b = (p1[2] - p0[2]) * (p2[0] - p0[0]) - (p1[0] - p0[0]) * (p2[2] - p0[2]);
         double c = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]);
-        p.a = a / sqrt(pow(a, 2) + pow(b, 2) + pow(c, 2));
-        p.b = b / sqrt(pow(a, 2) + pow(b, 2) + pow(c, 2));
-        p.c = c / sqrt(pow(a, 2) + pow(b, 2) + pow(c, 2));
+        double len = sqrt(a*a + b*b + c*c);
+        double inv_len = 1.0 / len;
+        p.a = a * inv_len;
+        p.b = b * inv_len;
+        p.c = c * inv_len;
         p.d = 0 - (p.a * p1[0] + p.b * p1[1] + p.c * p1[2]);
 
         for (int i = 0; i < (int)points.size(); i++)
@@ -298,9 +305,11 @@ namespace coacd
             double a = (p2[1] - p1[1]) * (p3[2] - p1[2]) - (p2[2] - p1[2]) * (p3[1] - p1[1]);
             double b = (p2[2] - p1[2]) * (p3[0] - p1[0]) - (p2[0] - p1[0]) * (p3[2] - p1[2]);
             double c = (p2[0] - p1[0]) * (p3[1] - p1[1]) - (p2[1] - p1[1]) * (p3[0] - p1[0]);
-            p.a = a / sqrt(pow(a, 2) + pow(b, 2) + pow(c, 2));
-            p.b = b / sqrt(pow(a, 2) + pow(b, 2) + pow(c, 2));
-            p.c = c / sqrt(pow(a, 2) + pow(b, 2) + pow(c, 2));
+            double len = sqrt(a*a + b*b + c*c);
+            double inv_len = 1.0 / len;
+            p.a = a * inv_len;
+            p.b = b * inv_len;
+            p.c = c * inv_len;
             p.d = 0 - (p.a * p1[0] + p.b * p1[1] + p.c * p1[2]);
 
             short side1 = 0;

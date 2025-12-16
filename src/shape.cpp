@@ -31,18 +31,22 @@ namespace coacd
 
         n = CrossProduct(v, w);
 
-        normal[0] = n[0] / sqrt(pow(n[0], 2) + pow(n[1], 2) + pow(n[2], 2));
-        normal[1] = n[1] / sqrt(pow(n[0], 2) + pow(n[1], 2) + pow(n[2], 2));
-        normal[2] = n[2] / sqrt(pow(n[0], 2) + pow(n[1], 2) + pow(n[2], 2));
+        // Compute length once instead of 3 times
+        double len = sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2]);
+        double inv_len = 1.0 / len;
+        normal[0] = n[0] * inv_len;
+        normal[1] = n[1] * inv_len;
+        normal[2] = n[2] * inv_len;
 
         return normal;
     }
 
     double Area(vec3d p0, vec3d p1, vec3d p2)
     {
-        return 0.5 * sqrt(pow(p1[0] * p0[1] - p2[0] * p0[1] - p0[0] * p1[1] + p2[0] * p1[1] + p0[0] * p2[1] - p1[0] * p2[1], 2) +
-                          pow(p1[0] * p0[2] - p2[0] * p0[2] - p0[0] * p1[2] + p2[0] * p1[2] + p0[0] * p2[2] - p1[0] * p2[2], 2) +
-                          pow(p1[1] * p0[2] - p2[1] * p0[2] - p0[1] * p1[2] + p2[1] * p1[2] + p0[1] * p2[2] - p1[1] * p2[2], 2));
+        double t1 = p1[0] * p0[1] - p2[0] * p0[1] - p0[0] * p1[1] + p2[0] * p1[1] + p0[0] * p2[1] - p1[0] * p2[1];
+        double t2 = p1[0] * p0[2] - p2[0] * p0[2] - p0[0] * p1[2] + p2[0] * p1[2] + p0[0] * p2[2] - p1[0] * p2[2];
+        double t3 = p1[1] * p0[2] - p2[1] * p0[2] - p0[1] * p1[2] + p2[1] * p1[2] + p0[1] * p2[2] - p1[1] * p2[2];
+        return 0.5 * sqrt(t1*t1 + t2*t2 + t3*t3);
     }
 
     double Volume(vec3d p1, vec3d p2, vec3d p3)

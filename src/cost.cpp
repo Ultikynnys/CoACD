@@ -11,7 +11,7 @@ namespace coacd
   {
     double v1 = MeshVolume(tmesh1);
     double v2 = MeshVolume(tmesh2);
-    double d = pow(3 * fabs(v1 - v2) / (4 * Pi), 1.0 / 3) * k;
+    double d = cbrt(3 * fabs(v1 - v2) / (4 * Pi)) * k;
     return d;
   }
 
@@ -23,7 +23,7 @@ namespace coacd
     v2 = MeshVolume(cvx2);
     v3 = MeshVolume(cvxCH);
 
-    double d = pow(3 * fabs(v1 + v2 - v3) / (4 * Pi), 1.0 / 3) * k;
+    double d = cbrt(3 * fabs(v1 + v2 - v3) / (4 * Pi)) * k;
 
     return d;
   }
