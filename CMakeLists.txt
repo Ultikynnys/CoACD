@@ -46,8 +46,9 @@ if(NOT MSVC)
         # Note: -ffast-math is NOT used because the CDT predicates library requires IEEE 754 compliance
         set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG")
     else()
-        # Linux: Use native optimizations
-        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -march=native -DNDEBUG")
+        # Linux: Don't use -march=native for portable wheel builds (causes SIGILL on different CPUs)
+        # Users building locally can add -march=native to CMAKE_CXX_FLAGS manually if desired
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG")
     endif()
 endif()
 
