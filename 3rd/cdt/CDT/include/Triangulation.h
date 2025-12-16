@@ -1112,10 +1112,11 @@ void Triangulation<T, TNearPointLocator>::insertEdges(
         }
 #endif
         // +3 to account for super-triangle vertices
+        const Edge edge(
             VertInd(getStart(*first) + m_nTargetVerts),
             VertInd(getEnd(*first) + m_nTargetVerts));
         // DEBUG LOGGING
-        // std::cout << "[CDT] Inserting edge: " << edge.v1() << " - " << edge.v2() << std::endl;
+        std::cout << "[CDT] Inserting edge: " << edge.v1() << " - " << edge.v2() << std::endl;
         insertEdge(edge, edge, remaining, tppIterations);
     }
 }

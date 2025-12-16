@@ -474,6 +474,9 @@ V2d<T> intersectionPosition(
 } // namespace detail
 
 template <typename T, typename TNearPointLocator>
+void Triangulation<T, TNearPointLocator>::insertEdgeIteration(
+    const Edge edge,
+    const Edge originalEdge,
     EdgeVec& remaining,
     std::vector<TriangulatePseudoPolygonTask>& tppIterations)
 {
