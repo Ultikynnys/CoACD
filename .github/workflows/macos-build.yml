@@ -1,0 +1,140 @@
+name: macOS Build
+on:
+  workflow_dispatch:
+
+jobs:
+  build_wheels:
+    runs-on: macos-latest
+    name: Build macOS - arm64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install Dependencies
+        run: pip3 install --break-system-packages wheel
+
+      - name: Build Wheels
+        uses: pypa/cibuildwheel@v2.22.0
+        env:
+          CIBW_ARCHS: 'auto64'
+          CIBW_BUILD: 'cp3{9,10,11,12,13}-macosx_arm64'
+          MACOSX_DEPLOYMENT_TARGET: "11"
+          CIBW_BUILD_VERBOSITY: 1
+          CIBW_TEST_COMMAND: ""
+
+      - name: List Build Results
+        shell: bash
+        run: ls -lh wheelhouse
+
+      - name: Verify Wheel Contents
+        shell: bash
+        run: |
+          echo "Verifying wheel contents..."
+          for wheel in wheelhouse/*.whl; do
+            echo "Inspecting $wheel"
+            python3 -m zipfile -l "$wheel" | grep -E '\.(so|pyd|dll|dylib)' || echo "Warning: No binaries found in $wheel"
+          done
+
+      - name: Test Wheel Functionality
+        shell: bash
+        run: |
+          echo "Testing wheel functionality with example mesh..."
+          WHEEL=$(ls wheelhouse/*.whl | head -1)
+          echo "Installing wheel: $WHEEL"
+          python3 -m pip install "$WHEEL" numpy trimesh --break-system-packages
+          
+          cat > test_coacd.py << 'EOF'
+          import sys
+          import faulthandler
+          import traceback
+          
+          faulthandler.enable()
+          
+          print("=" * 60, flush=True)
+          print("STEP 1: Importing modules...", flush=True)
+          try:
+              import trimesh
+              print("  - trimesh imported successfully", flush=True)
+          except Exception as e:
+              print(f"  - ERROR importing trimesh: {e}", flush=True)
+              sys.exit(1)
+          
+          try:
+              import coacd_u as coacd
+              print("  - coacd_u imported successfully", flush=True)
+          except Exception as e:
+              print(f"  - ERROR importing coacd_u: {e}", flush=True)
+              traceback.print_exc()
+              sys.exit(1)
+          
+          print("=" * 60, flush=True)
+          print("STEP 2: Setting log level...", flush=True)
+          try:
+              coacd.set_log_level('info')
+              print("  - Log level set to 'info'", flush=True)
+          except Exception as e:
+              print(f"  - ERROR setting log level: {e}", flush=True)
+              sys.exit(1)
+          
+          print("=" * 60, flush=True)
+          print("STEP 3: Loading mesh file...", flush=True)
+          try:
+              mesh = trimesh.load('examples/Bottle.obj', force='mesh')
+              print(f"  - Mesh loaded: {len(mesh.vertices)} vertices, {len(mesh.faces)} faces", flush=True)
+          except Exception as e:
+              print(f"  - ERROR loading mesh: {e}", flush=True)
+              sys.exit(1)
+          
+          print("=" * 60, flush=True)
+          print("STEP 4: Creating CoACD mesh object...", flush=True)
+          try:
+              coacd_mesh = coacd.Mesh(mesh.vertices, mesh.faces)
+              print("  - CoACD mesh created successfully", flush=True)
+          except Exception as e:
+              print(f"  - ERROR creating CoACD mesh: {e}", flush=True)
+              traceback.print_exc()
+              sys.exit(1)
+          
+          print("=" * 60, flush=True)
+          print("STEP 5: Running CoACD decomposition...", flush=True)
+          print("        Using threshold=0.05, single-threaded for debugging", flush=True)
+          sys.stdout.flush()
+          sys.stderr.flush()
+          
+          try:
+              import os
+              os.environ['OMP_NUM_THREADS'] = '1'
+              print(f"  - OMP_NUM_THREADS set to: {os.environ.get('OMP_NUM_THREADS')}", flush=True)
+              
+              result = coacd.run_coacd(coacd_mesh, threshold=0.05)
+              print(f"  - SUCCESS: Generated {len(result)} convex hulls", flush=True)
+              assert len(result) > 0, 'Expected at least one convex hull'
+              print("=" * 60, flush=True)
+              print("TEST PASSED!", flush=True)
+          except Exception as e:
+              print(f"  - ERROR running CoACD: {e}", flush=True)
+              traceback.print_exc()
+              sys.exit(1)
+          EOF
+          
+          echo "Running test with debugging enabled..."
+          python3 test_coacd.py 2>&1 || {
+            EXIT_CODE=$?
+            echo ""
+            echo "========================================"
+            echo "TEST FAILED with exit code: $EXIT_CODE"
+            echo "========================================"
+            
+            exit $EXIT_CODE
+          }
+
+      - name: Upload Wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-arm64
+          path: ./wheelhouse/*.whl
+          if-no-files-found: warn
+          compression-level: 6
+          overwrite: false
