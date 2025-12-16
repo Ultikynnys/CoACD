@@ -1097,9 +1097,17 @@ void Triangulation<T, TNearPointLocator>::insertEdges(
     const TEdgeIter last,
     TGetEdgeVertexStart getStart,
     TGetEdgeVertexEnd getEnd)
-{
     if(isFinalized())
         handleException(FinalizedError(CDT_SOURCE_LOCATION));
+    
+    // DEBUG: Check alignment
+    std::cout << "[CDT] alignof(Triangle): " << alignof(Triangle) << " sizeof(Triangle): " << sizeof(Triangle) << std::endl;
+    std::cout << "[CDT] alignof(V2d<T>): " << alignof(V2d<T>) << " sizeof(V2d<T>): " << sizeof(V2d<T>) << std::endl;
+    #ifdef CDT_USE_64_BIT_INDEX_TYPE
+    std::cout << "[CDT] Using 64-bit indices" << std::endl;
+    #else
+    std::cout << "[CDT] Using 32-bit indices" << std::endl;
+    #endif
 
     std::vector<TriangulatePseudoPolygonTask> tppIterations;
     EdgeVec remaining;
@@ -1115,8 +1123,13 @@ void Triangulation<T, TNearPointLocator>::insertEdges(
         const Edge edge(
             VertInd(getStart(*first) + m_nTargetVerts),
             VertInd(getEnd(*first) + m_nTargetVerts));
-        // DEBUG LOGGING
-        std::cout << "[CDT] Inserting edge: " << edge.v1() << " - " << edge.v2() << std::endl;
+        
+        static int edge_counter = 0;
+        edge_counter++;
+        if (edge_counter % 1000 == 0) {
+            std::cout << "[CDT] Heartbeat - Inserting edge: " << edge.v1() << " - " << edge.v2() << " (Count: " << edge_counter << ")" << std::endl;
+        }
+
         insertEdge(edge, edge, remaining, tppIterations);
     }
 }
