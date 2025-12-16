@@ -506,7 +506,7 @@ namespace coacd
     bool ComputeBestRvClippingPlane(Model &m, Params &params, vector<Plane> &planes, Plane &bestplane, double &bestcost)
     {
         profiler::ScopedTimer timer("MCTS_ComputeBestRvClippingPlane");
-        logger::info("        [ComputeBestRvClippingPlane] Start (planes={}, points={})", planes.size(), m.points.size());
+        logger::debug("        [ComputeBestRvClippingPlane] Start (planes={}, points={})", planes.size(), m.points.size());
         if ((int)planes.size() == 0)
             return false;
         
@@ -521,7 +521,7 @@ namespace coacd
         // Early stopping threshold
         double early_stop_threshold = params.threshold * 0.8;
         
-        logger::info("        [ComputeBestRvClippingPlane] Creating indices");
+        logger::debug("        [ComputeBestRvClippingPlane] Creating indices");
         // Shuffle to get random sampling - use local RNG to avoid thread_local TLS issues
         std::vector<int> indices(planes.size());
         for (int i = 0; i < (int)planes.size(); i++) indices[i] = i;
@@ -529,7 +529,7 @@ namespace coacd
         std::mt19937 local_rng(static_cast<unsigned int>(planes.size()));
         std::shuffle(indices.begin(), indices.end(), local_rng);
         
-        logger::info("        [ComputeBestRvClippingPlane] Pre-filter loop");
+        logger::debug("        [ComputeBestRvClippingPlane] Pre-filter loop");
         // Pre-filter: quick imbalance check to reduce candidate set; then order by balance closeness to 50/50
         struct Cand { int idx; double score; };
         std::vector<Cand> candidates;
@@ -563,7 +563,7 @@ namespace coacd
             candidates.push_back({i, score});
         }
 
-        logger::info("        [ComputeBestRvClippingPlane] Sorting candidates (count={})", candidates.size());
+        logger::debug("        [ComputeBestRvClippingPlane] Sorting candidates (count={})", candidates.size());
         // Sort candidates by increasing imbalance (i.e., most balanced first)
         std::sort(candidates.begin(), candidates.end(), [](const Cand& a, const Cand& b){ return a.score < b.score; });
         std::vector<int> filtered_indices;
@@ -573,7 +573,7 @@ namespace coacd
         if (filtered_indices.empty())
             return false;
         
-        logger::info("        [ComputeBestRvClippingPlane] Evaluating planes (count={})", filtered_indices.size());
+        logger::debug("        [ComputeBestRvClippingPlane] Evaluating planes (count={})", filtered_indices.size());
         
         // Parallel evaluation of candidate planes
         // IMPORTANT: Only parallelize if we're NOT already in a parallel region
@@ -588,7 +588,7 @@ namespace coacd
 #endif
         for (int idx = 0; idx < (int)filtered_indices.size(); idx++)
         {
-            if (idx == 0) logger::info("        [ComputeBestRvClippingPlane] Loop idx=0 starting");
+            if (idx == 0) logger::debug("        [ComputeBestRvClippingPlane] Loop idx=0 starting");
             // Early exit if another thread found a great plane
             if (found_good_plane.load(std::memory_order_relaxed))
                 continue;
@@ -597,13 +597,13 @@ namespace coacd
             double cut_area;
             Model pos, neg, posCH, negCH;
             
-            if (idx == 0) logger::info("        [ComputeBestRvClippingPlane] Loop idx=0 - Clip start (plane_idx={})", i);
+            if (idx == 0) logger::debug("        [ComputeBestRvClippingPlane] Loop idx=0 - Clip start (plane_idx={})", i);
             bool flag;
             {
                 profiler::ScopedTimer t("MCTS_PlaneEval_Clip");
                 flag = Clip(m, pos, neg, planes[i], cut_area, true);
             }
-            if (idx == 0) logger::info("        [ComputeBestRvClippingPlane] Loop idx=0 - Clip done (flag={}, pos={}, neg={})", flag, pos.points.size(), neg.points.size());
+            if (idx == 0) logger::debug("        [ComputeBestRvClippingPlane] Loop idx=0 - Clip done (flag={}, pos={}, neg={})", flag, pos.points.size(), neg.points.size());
             
             if (!flag || pos.points.size() <= 0 || neg.points.size() <= 0)
             {
@@ -611,21 +611,21 @@ namespace coacd
                 continue;
             }
             
-            if (idx == 0) logger::info("        [ComputeBestRvClippingPlane] Loop idx=0 - ComputeAPX start");
+            if (idx == 0) logger::debug("        [ComputeBestRvClippingPlane] Loop idx=0 - ComputeAPX start");
             {
                 profiler::ScopedTimer t("MCTS_PlaneEval_ComputeAPX");
                 pos.ComputeAPX(posCH);
                 neg.ComputeAPX(negCH);
             }
-            if (idx == 0) logger::info("        [ComputeBestRvClippingPlane] Loop idx=0 - ComputeAPX done");
+            if (idx == 0) logger::debug("        [ComputeBestRvClippingPlane] Loop idx=0 - ComputeAPX done");
             
-            if (idx == 0) logger::info("        [ComputeBestRvClippingPlane] Loop idx=0 - ComputeTotalRv start");
+            if (idx == 0) logger::debug("        [ComputeBestRvClippingPlane] Loop idx=0 - ComputeTotalRv start");
             double H;
             {
                 profiler::ScopedTimer t("MCTS_PlaneEval_ComputeTotalRv");
                 H = ComputeTotalRv(m, pos, posCH, neg, negCH, params.rv_k, planes[i]);
             }
-            if (idx == 0) logger::info("        [ComputeBestRvClippingPlane] Loop idx=0 - ComputeTotalRv done (H={})", H);
+            if (idx == 0) logger::debug("        [ComputeBestRvClippingPlane] Loop idx=0 - ComputeTotalRv done (H={})", H);
             
             costs[idx] = H;
             
@@ -695,9 +695,9 @@ namespace coacd
     double default_policy(Node *node, Params &params, vector<Plane> &current_path)
     {
         profiler::ScopedTimer timer("MCTS_default_policy");
-        logger::info("      [default_policy] Start");
+        logger::debug("      [default_policy] Start");
         State *original_state = node->get_state();
-        logger::info("      [default_policy] Copying state");
+        logger::debug("      [default_policy] Copying state");
         State current_state = *original_state;
         double current_state_reward;
         original_state->worst_part_idx = current_state.worst_part_idx;
@@ -705,19 +705,19 @@ namespace coacd
         int loop_iter = 0;
         while (current_state.is_terminal() == false)
         {
-            if (loop_iter == 0) logger::info("      [default_policy] Loop iter 0 - getting planes");
+            if (loop_iter == 0) logger::debug("      [default_policy] Loop iter 0 - getting planes");
             vector<Plane> planes;
             Plane bestplane;
             double bestcost, cut_area;
             planes = current_state.current_parts[current_state.worst_part_idx].available_moves;
-            if (loop_iter == 0) logger::info("      [default_policy] Loop iter 0 - planes.size()={}", planes.size());
+            if (loop_iter == 0) logger::debug("      [default_policy] Loop iter 0 - planes.size()={}", planes.size());
             if ((int)planes.size() == 0)
             {
                 break;
             }
-            if (loop_iter == 0) logger::info("      [default_policy] Loop iter 0 - ComputeBestRvClippingPlane start");
+            if (loop_iter == 0) logger::debug("      [default_policy] Loop iter 0 - ComputeBestRvClippingPlane start");
             ComputeBestRvClippingPlane(current_state.current_parts[current_state.worst_part_idx].current_mesh, params, planes, bestplane, bestcost);
-            if (loop_iter == 0) logger::info("      [default_policy] Loop iter 0 - ComputeBestRvClippingPlane done");
+            if (loop_iter == 0) logger::debug("      [default_policy] Loop iter 0 - ComputeBestRvClippingPlane done");
 
             Model pos, neg, posCH, negCH;
             bool clipf;
