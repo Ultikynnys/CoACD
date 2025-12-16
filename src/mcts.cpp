@@ -856,7 +856,7 @@ namespace coacd
         // Early stopping on diminishing returns
         double best_reward = INF;
         const double improve_tol = 0.01; // 1% improvement threshold
-        int patience = std::max(20, computation_budget / 4);
+        int patience = std::max(10, computation_budget / 10);
         int stale = 0;
 
         logger::info("    [MCTS] Starting iterations (budget={})", computation_budget);
