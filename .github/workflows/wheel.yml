@@ -67,7 +67,7 @@ jobs:
           # Install the built wheel (use the first matching wheel for this platform)
           WHEEL=$(ls wheelhouse/*.whl | head -1)
           echo "Installing wheel: $WHEEL"
-          python3 -m pip install "$WHEEL" numpy trimesh
+          python3 -m pip install "$WHEEL" numpy trimesh --break-system-packages
           
           # On Linux, enable core dumps and install gdb for backtrace
           if [[ "$RUNNER_OS" == "Linux" ]]; then
