@@ -71,7 +71,8 @@ class CMakeBuild(build_ext):
             # -DNDEBUG disables assertions in third-party libraries (like CDT) that cause crashes on Linux
             cmake_args.append("-DCMAKE_CXX_FLAGS=-fPIC -static-libgcc -static-libstdc++ -DNDEBUG")
         elif system == 'darwin':
-            cmake_args.append("-DCMAKE_CXX_FLAGS=-fPIC")
+            # -DNDEBUG disables assertions in third-party libraries (like CDT) that can cause issues
+            cmake_args.append("-DCMAKE_CXX_FLAGS=-fPIC -DNDEBUG")
         
         # Let cibuildwheel control the architecture (don't force universal binaries)
         # CMAKE_OSX_ARCHITECTURES is set by cibuildwheel automatically

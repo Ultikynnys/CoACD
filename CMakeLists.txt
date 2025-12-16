@@ -43,7 +43,8 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS}")
 if(NOT MSVC)
     if(APPLE)
         # macOS: Don't use -march=native for universal binary compatibility
-        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -ffast-math -DNDEBUG")
+        # Note: -ffast-math is NOT used because the CDT predicates library requires IEEE 754 compliance
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG")
     else()
         # Linux: Use native optimizations
         set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -march=native -DNDEBUG")
