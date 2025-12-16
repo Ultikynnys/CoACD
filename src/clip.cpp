@@ -255,6 +255,13 @@ namespace coacd
         }
 
         int borderN = (int)points.size(); // original size for later vertex addition
+        
+        logger::info("    [Triangulation] Starting CDT (points={}, edges={})", uniquePoints.size(), validEdges.size());
+        if (!validEdges.empty()) {
+             logger::info("    [Triangulation] First edge: ({}, {}), Last edge: ({}, {})", 
+                validEdges.front().first, validEdges.front().second, 
+                validEdges.back().first, validEdges.back().second);
+        }
 
         CDT::Triangulation<double> cdt(
             CDT::VertexInsertionOrder::Auto,
@@ -264,6 +271,7 @@ namespace coacd
         
         try
         {
+            logger::info("    [Triangulation] Inserting vertices...");
             cdt.insertVertices(
                 uniquePoints.begin(),
                 uniquePoints.end(),
@@ -271,6 +279,8 @@ namespace coacd
                 { return p[0]; },
                 [](const std::array<double, 2> &p)
                 { return p[1]; });
+            
+            logger::info("    [Triangulation] Inserting edges...");
             cdt.insertEdges(
                 validEdges.begin(),
                 validEdges.end(),
@@ -278,15 +288,21 @@ namespace coacd
                 { return (int)p.first; },  // already 0-based now
                 [](const std::pair<int, int> &p)
                 { return (int)p.second; });  // already 0-based now
+
+            logger::info("    [Triangulation] Erasing super triangle...");
             cdt.eraseSuperTriangle();
+            
+            logger::info("    [Triangulation] CDT Done. Triangles: {}", cdt.triangles.size());
         }
         catch (const std::exception &e)
         {
+            logger::error("    [Triangulation] CDT Exception: {}", e.what());
             // If CDT still fails, gracefully return error code
             return 2;
         }
         catch (...)
         {
+            logger::error("    [Triangulation] CDT Unknown Exception");
             // Catch any other errors (including potential assertion failures)
             return 2;
         }
