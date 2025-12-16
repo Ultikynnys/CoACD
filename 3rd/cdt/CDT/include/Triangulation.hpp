@@ -485,6 +485,14 @@ void Triangulation<T, TNearPointLocator>::insertEdgeIteration(
     if(iA == iB) // edge connects a vertex to itself
         return;
 
+    // Bounds checking to prevent Bus errors on ARM64
+    const VertInd numVerts = static_cast<VertInd>(vertices.size());
+    if(iA >= numVerts || iB >= numVerts)
+    {
+        // Invalid vertex indices - skip this edge to avoid crash
+        return;
+    }
+
     if(hasEdge(iA, iB))
     {
         fixEdge(edge, originalEdge);
@@ -694,6 +702,14 @@ void Triangulation<T, TNearPointLocator>::conformToEdgeIteration(
     VertInd iB = edge.v2();
     if(iA == iB) // edge connects a vertex to itself
         return;
+
+    // Bounds checking to prevent Bus errors on ARM64
+    const VertInd numVerts = static_cast<VertInd>(vertices.size());
+    if(iA >= numVerts || iB >= numVerts)
+    {
+        // Invalid vertex indices - skip this edge to avoid crash
+        return;
+    }
 
     if(hasEdge(iA, iB))
     {
