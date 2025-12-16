@@ -256,11 +256,11 @@ namespace coacd
 
         int borderN = (int)points.size(); // original size for later vertex addition
         
-        logger::info("    [Triangulation] Starting CDT (points={}, edges={})", uniquePoints.size(), validEdges.size());
+        // logger::info("    [Triangulation] Starting CDT (points={}, edges={})", uniquePoints.size(), validEdges.size());
         if (!validEdges.empty()) {
-             logger::info("    [Triangulation] First edge: ({}, {}), Last edge: ({}, {})", 
-                validEdges.front().first, validEdges.front().second, 
-                validEdges.back().first, validEdges.back().second);
+             // logger::info("    [Triangulation] First edge: ({}, {}), Last edge: ({}, {})", 
+             //   validEdges.front().first, validEdges.front().second, 
+             //   validEdges.back().first, validEdges.back().second);
         }
 
         CDT::Triangulation<double> cdt(
@@ -271,7 +271,7 @@ namespace coacd
         
         try
         {
-            logger::info("    [Triangulation] Inserting vertices...");
+            // logger::info("    [Triangulation] Inserting vertices...");
             cdt.insertVertices(
                 uniquePoints.begin(),
                 uniquePoints.end(),
@@ -280,7 +280,7 @@ namespace coacd
                 [](const std::array<double, 2> &p)
                 { return p[1]; });
             
-            logger::info("    [Triangulation] Inserting edges...");
+            // logger::info("    [Triangulation] Inserting edges...");
             cdt.insertEdges(
                 validEdges.begin(),
                 validEdges.end(),
@@ -289,10 +289,10 @@ namespace coacd
                 [](const std::pair<int, int> &p)
                 { return (int)p.second; });  // already 0-based now
 
-            logger::info("    [Triangulation] Erasing super triangle...");
+            // logger::info("    [Triangulation] Erasing super triangle...");
             cdt.eraseSuperTriangle();
             
-            logger::info("    [Triangulation] CDT Done. Triangles: {}", cdt.triangles.size());
+            // logger::info("    [Triangulation] CDT Done. Triangles: {}", cdt.triangles.size());
         }
         catch (const std::exception &e)
         {

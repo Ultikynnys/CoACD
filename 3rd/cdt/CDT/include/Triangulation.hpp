@@ -10,6 +10,7 @@
 #include "Triangulation.h"
 #include "portable_nth_element.hpp"
 
+#include <iostream>
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -473,12 +474,16 @@ V2d<T> intersectionPosition(
 } // namespace detail
 
 template <typename T, typename TNearPointLocator>
-void Triangulation<T, TNearPointLocator>::insertEdgeIteration(
-    const Edge edge,
-    const Edge originalEdge,
     EdgeVec& remaining,
     std::vector<TriangulatePseudoPolygonTask>& tppIterations)
 {
+    // DEBUG LOGGING
+    if (edge.v1() > 100000 || edge.v2() > 100000) {
+         // Sanity check for corruption
+         std::cout << "[CDT] CRIT: Corrupted edge indices: " << edge.v1() << " - " << edge.v2() << std::endl;
+    }
+    std::cout << "[CDT] insertEdgeIter: " << edge.v1() << " - " << edge.v2() << " Orig: " << originalEdge.v1() << "-" << originalEdge.v2() << std::endl;
+
     const VertInd iA = edge.v1();
     VertInd iB = edge.v2();
     if(iA == iB) // edge connects a vertex to itself
@@ -500,7 +505,9 @@ void Triangulation<T, TNearPointLocator>::insertEdgeIteration(
     TriInd iT;
     // Note: 'L' is left and 'R' is right of the inserted constraint edge
     VertInd iVL, iVR;
+    std::cout << "[CDT] Calling intersectedTriangle for " << iA << " (" << a.x << "," << a.y << ") -> " << iB << " (" << b.x << "," << b.y << ")" << std::endl;
     tie(iT, iVL, iVR) = intersectedTriangle(iA, a, b, distanceTolerance);
+    std::cout << "[CDT] intersectedTriangle result: T=" << iT << " VL=" << iVL << " VR=" << iVR << std::endl;
     // if one of the triangle vertices is on the edge, move edge start
     if(iT == noNeighbor)
     {
