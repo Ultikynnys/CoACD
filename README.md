@@ -30,14 +30,16 @@ Approximate convex decomposition enables efficient geometry processing algorithm
 
 Download the prebuilt wheel for your platform from [GitHub Releases](https://github.com/ultikynnys/coacd/releases), then install:
 
+X is the latest version number.
+
 ```bash
-pip install coacd_u-1.0.9-cp312-abi3-win_amd64.whl
+pip install coacd_u-1.0.X-cp312-abi3-win_amd64.whl
 ```
 
 Wheels are available for:
-- **Windows**: `coacd_u-1.0.9-cp312-abi3-win_amd64.whl`
-- **Linux**: `coacd_u-1.0.9-cp312-abi3-linux_x86_64.whl`
-- **macOS**: `coacd_u-1.0.9-cp312-abi3-macosx_*.whl`
+- **Windows**: `coacd_u-1.0.X-cp312-abi3-win_amd64.whl`
+- **Linux**: `coacd_u-1.0.X-cp312-abi3-linux_x86_64.whl`
+- **macOS**: `coacd_u-1.0.X-cp312-abi3-macosx_*.whl`
 
 ### Python Example
 
