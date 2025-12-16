@@ -12,3 +12,4 @@ build_vs/
 .env
 coacd_u.egg-info/
 venv
+__pycache__/
